@@ -52,10 +52,6 @@ pub const KSM_MAGIC1: c_int = uapi::KSM_MAGIC1 as c_int;
 pub const KSM_MAGIC2: c_int = uapi::KSM_MAGIC2 as c_int;
 pub const KSM_PROTOCOL_VERSION: c_int = uapi::KSM_PROTOCOL_VERSION as c_int;
 
-pub const KSM_MAX_LEN_PATHNAME: usize = uapi::KSM_MAX_LEN_PATHNAME as usize;
-pub const KSM_FAKE_CMDLINE_SIZE: usize = uapi::KSM_FAKE_CMDLINE_SIZE as usize;
-pub const KSM_UNAME_LEN: usize = uapi::KSM_UNAME_LEN as usize;
-
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const KSM_SYSCALL_NR: libc::c_long = uapi::KSM_SYSCALL_NR as libc::c_long;
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -114,7 +110,7 @@ impl Default for uapi::kasumi_spoof_kstat {
     fn default() -> Self {
         Self {
             target_ino: 0,
-            target_pathname: [0; KSM_MAX_LEN_PATHNAME],
+            target_pathname: [0; uapi::KSM_MAX_LEN_PATHNAME as usize],
             spoofed_ino: 0,
             spoofed_dev: 0,
             spoofed_nlink: 0,
@@ -157,12 +153,12 @@ pub type KasumiSpoofUname = uapi::kasumi_spoof_uname;
 impl Default for uapi::kasumi_spoof_uname {
     fn default() -> Self {
         Self {
-            sysname: [0; KSM_UNAME_LEN],
-            nodename: [0; KSM_UNAME_LEN],
-            release: [0; KSM_UNAME_LEN],
-            version: [0; KSM_UNAME_LEN],
-            machine: [0; KSM_UNAME_LEN],
-            domainname: [0; KSM_UNAME_LEN],
+            sysname: [0; uapi::KSM_UNAME_LEN as usize],
+            nodename: [0; uapi::KSM_UNAME_LEN as usize],
+            release: [0; uapi::KSM_UNAME_LEN as usize],
+            version: [0; uapi::KSM_UNAME_LEN as usize],
+            machine: [0; uapi::KSM_UNAME_LEN as usize],
+            domainname: [0; uapi::KSM_UNAME_LEN as usize],
             err: 0,
         }
     }
@@ -199,7 +195,7 @@ pub type KasumiSpoofCmdline = uapi::kasumi_spoof_cmdline;
 impl Default for uapi::kasumi_spoof_cmdline {
     fn default() -> Self {
         Self {
-            cmdline: [0; KSM_FAKE_CMDLINE_SIZE],
+            cmdline: [0; uapi::KSM_FAKE_CMDLINE_SIZE as usize],
             err: 0,
         }
     }
@@ -226,7 +222,7 @@ impl Default for uapi::kasumi_maps_rule {
             target_dev: 0,
             spoofed_ino: 0,
             spoofed_dev: 0,
-            spoofed_pathname: [0; KSM_MAX_LEN_PATHNAME],
+            spoofed_pathname: [0; uapi::KSM_MAX_LEN_PATHNAME as usize],
             err: 0,
         }
     }
@@ -266,7 +262,7 @@ impl Default for uapi::kasumi_mount_hide_arg {
     fn default() -> Self {
         Self {
             enable: 0,
-            path_pattern: [0; KSM_MAX_LEN_PATHNAME],
+            path_pattern: [0; uapi::KSM_MAX_LEN_PATHNAME as usize],
             err: 0,
         }
     }
@@ -320,7 +316,7 @@ impl Default for uapi::kasumi_statfs_spoof_arg {
     fn default() -> Self {
         Self {
             enable: 0,
-            path: [0; KSM_MAX_LEN_PATHNAME],
+            path: [0; uapi::KSM_MAX_LEN_PATHNAME as usize],
             spoof_f_type: 0,
             err: 0,
         }
