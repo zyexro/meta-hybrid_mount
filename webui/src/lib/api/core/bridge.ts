@@ -83,6 +83,12 @@ function withTimeout<T>(
   });
 }
 
+export async function readModuleProp(modulePath: string): Promise<string> {
+  return runCommandExpectOk(
+    `cat "${shellEscapeDoubleQuoted(modulePath)}/module.prop"`,
+  );
+}
+
 export async function ensureDaemonAwake(binaryPath: string): Promise<void> {
   if (shouldUseMock || !hasExecBridge) return;
   if (daemonReady) return daemonReady;

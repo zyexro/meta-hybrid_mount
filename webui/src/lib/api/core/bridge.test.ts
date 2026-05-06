@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AppError } from "./error";
-import { parseHybridMountJsonOutput, shouldUseMock } from "./bridge";
+import {
+  parseHybridMountJsonOutput,
+  readModuleProp,
+  shouldUseMock,
+} from "./bridge";
 
 describe("parseHybridMountJsonOutput", () => {
   it("only enables the mock API in test mode", () => {
@@ -38,5 +42,11 @@ describe("parseHybridMountJsonOutput", () => {
         '{"ok":false,"error":"daemon request failed"}',
       ),
     ).toThrow("daemon request failed");
+  });
+
+  it("rejects module.prop reads outside KSU environment in tests", async () => {
+    await expect(readModuleProp("/tmp/module")).rejects.toThrow(
+      "No KSU environment",
+    );
   });
 });

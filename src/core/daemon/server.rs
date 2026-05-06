@@ -24,12 +24,12 @@ use std::{
     process::Command,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Error, Result, bail};
 use serde::Serialize;
 use serde_json::{Value, json};
 use signal_hook::{
@@ -70,6 +70,8 @@ pub fn serve(_config: Config) -> Result<()> {
     let _guard = DaemonRuntimeGuard::new(state.clone());
     let shutdown = install_shutdown_flag()?;
 
+    let active_webui_connections = Arc::new(AtomicUsize::new(0));
+
     crate::scoped_log!(
         info,
         "daemon",
@@ -93,13 +95,27 @@ pub fn serve(_config: Config) -> Result<()> {
             }
         }
         match webui.listener.accept() {
-            Ok((stream, _addr)) => {
+            Ok((mut stream, _addr)) => {
+                let Some(connection_guard) =
+                    ActiveWebuiConnectionGuard::try_acquire(&active_webui_connections)
+                else {
+                    let _ = write_http_json(
+                        &mut stream,
+                        503,
+                        "Service Unavailable",
+                        &DaemonResponse::error("too many active WebUI daemon connections"),
+                        false,
+                    );
+                    continue;
+                };
+
                 let state = state.clone();
                 let shutdown = shutdown.clone();
                 let session = webui_session.clone();
                 let _ = std::thread::Builder::new()
                     .name("hybrid-mount-webui-rpc".to_string())
                     .spawn(move || {
+                        let _connection_guard = connection_guard;
                         if let Err(err) =
                             handle_http_connection(&state, &shutdown, &session, stream)
                         {
@@ -229,6 +245,62 @@ struct WebuiHttpRequest {
     body: Vec<u8>,
 }
 
+const MAX_WEBUI_HTTP_BODY_BYTES: usize = 1024 * 1024;
+const MAX_WEBUI_CONNECTIONS: usize = 64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WebuiHttpRequestReadError {
+    InvalidContentLength,
+    RequestBodyTooLarge,
+}
+
+impl WebuiHttpRequestReadError {
+    fn status(self) -> (u16, &'static str, &'static str) {
+        match self {
+            Self::InvalidContentLength => (400, "Bad Request", "invalid content-length header"),
+            Self::RequestBodyTooLarge => (413, "Payload Too Large", "request body too large"),
+        }
+    }
+}
+
+impl std::fmt::Display for WebuiHttpRequestReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (_, _, message) = self.status();
+        f.write_str(message)
+    }
+}
+
+impl std::error::Error for WebuiHttpRequestReadError {}
+
+struct ActiveWebuiConnectionGuard {
+    active_connections: Arc<AtomicUsize>,
+}
+
+impl ActiveWebuiConnectionGuard {
+    fn try_acquire(active_connections: &Arc<AtomicUsize>) -> Option<Self> {
+        loop {
+            let current = active_connections.load(Ordering::Relaxed);
+            if current >= MAX_WEBUI_CONNECTIONS {
+                return None;
+            }
+            if active_connections
+                .compare_exchange(current, current + 1, Ordering::Relaxed, Ordering::Relaxed)
+                .is_ok()
+            {
+                return Some(Self {
+                    active_connections: active_connections.clone(),
+                });
+            }
+        }
+    }
+}
+
+impl Drop for ActiveWebuiConnectionGuard {
+    fn drop(&mut self) {
+        self.active_connections.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 fn handle_http_connection(
     state: &Arc<Mutex<RuntimeState>>,
     shutdown: &Arc<AtomicBool>,
@@ -248,8 +320,23 @@ fn handle_http_connection(
     );
 
     while !shutdown.load(Ordering::Relaxed) {
-        let Some(request) = read_http_request(&mut reader, webui)? else {
-            break;
+        let request = match read_http_request(&mut reader, webui) {
+            Ok(Some(request)) => request,
+            Ok(None) => break,
+            Err(err) => {
+                if let Some(read_err) = err.downcast_ref::<WebuiHttpRequestReadError>() {
+                    let (status, reason, message) = read_err.status();
+                    let _ = write_http_json(
+                        &mut stream,
+                        status,
+                        reason,
+                        &DaemonResponse::error(message),
+                        false,
+                    );
+                    break;
+                }
+                return Err(err);
+            }
         };
         if handle_http_request(state, shutdown, webui, &mut stream, request)? {
             break;
@@ -291,7 +378,7 @@ fn read_http_request(
             let name = name.trim().to_ascii_lowercase();
             let value = value.trim();
             if name == "content-length" {
-                content_length = value.parse().unwrap_or(0);
+                content_length = parse_content_length(value)?;
             } else if name == "authorization" {
                 authorized = value == format!("Bearer {}", webui.token);
             } else if name == "connection" {
@@ -309,7 +396,7 @@ fn read_http_request(
         }
     }
 
-    let mut body = vec![0; content_length];
+    let mut body = allocate_request_body(content_length)?;
     std::io::Read::read_exact(reader, &mut body)
         .context("Failed to read WebUI HTTP request body")?;
 
@@ -319,6 +406,23 @@ fn read_http_request(
         close_after_response,
         body,
     }))
+}
+
+fn parse_content_length(value: &str) -> Result<usize> {
+    let content_length = value
+        .parse::<usize>()
+        .map_err(|_| Error::new(WebuiHttpRequestReadError::InvalidContentLength))?;
+    if content_length > MAX_WEBUI_HTTP_BODY_BYTES {
+        return Err(Error::new(WebuiHttpRequestReadError::RequestBodyTooLarge));
+    }
+    Ok(content_length)
+}
+
+fn allocate_request_body(content_length: usize) -> Result<Vec<u8>> {
+    if content_length > MAX_WEBUI_HTTP_BODY_BYTES {
+        return Err(Error::new(WebuiHttpRequestReadError::RequestBodyTooLarge));
+    }
+    Ok(vec![0; content_length])
 }
 
 fn handle_http_request(
@@ -484,6 +588,61 @@ fn reboot_device() -> Result<()> {
         bail!("reboot exited with status {status}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_content_length_accepts_valid_value() {
+        assert_eq!(parse_content_length("128").unwrap(), 128);
+    }
+
+    #[test]
+    fn parse_content_length_rejects_invalid_value() {
+        let err = parse_content_length("nope").unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<WebuiHttpRequestReadError>(),
+            Some(&WebuiHttpRequestReadError::InvalidContentLength)
+        );
+    }
+
+    #[test]
+    fn parse_content_length_rejects_oversized_value() {
+        let err = parse_content_length(&(MAX_WEBUI_HTTP_BODY_BYTES + 1).to_string()).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<WebuiHttpRequestReadError>(),
+            Some(&WebuiHttpRequestReadError::RequestBodyTooLarge)
+        );
+    }
+
+    #[test]
+    fn allocate_request_body_rejects_oversized_value() {
+        let err = allocate_request_body(MAX_WEBUI_HTTP_BODY_BYTES + 1).unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<WebuiHttpRequestReadError>(),
+            Some(&WebuiHttpRequestReadError::RequestBodyTooLarge)
+        );
+    }
+
+    #[test]
+    fn connection_guard_tracks_active_connections() {
+        let active_connections = Arc::new(AtomicUsize::new(0));
+        {
+            let _first = ActiveWebuiConnectionGuard::try_acquire(&active_connections).unwrap();
+            assert_eq!(active_connections.load(Ordering::Relaxed), 1);
+            let _second = ActiveWebuiConnectionGuard::try_acquire(&active_connections).unwrap();
+            assert_eq!(active_connections.load(Ordering::Relaxed), 2);
+        }
+        assert_eq!(active_connections.load(Ordering::Relaxed), 0);
+    }
+
+    #[test]
+    fn connection_guard_enforces_connection_limit() {
+        let active_connections = Arc::new(AtomicUsize::new(MAX_WEBUI_CONNECTIONS));
+        assert!(ActiveWebuiConnectionGuard::try_acquire(&active_connections).is_none());
+    }
 }
 
 fn add_kasumi_maps_config_rule(config_path: &Path, rule: Value) -> Result<Config> {

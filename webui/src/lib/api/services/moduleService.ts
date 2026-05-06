@@ -1,25 +1,40 @@
 import { PATHS } from "../../constants";
 import type { Module, ModuleRules } from "../../types";
-import { runHybridMountJson } from "../core/bridge";
+import { readModuleProp, runHybridMountJson } from "../core/bridge";
 import { isBoolean, isRecord, isString } from "../core/guards";
 import { shellEscapeDoubleQuoted } from "../core/shell";
 import { normalizeMountMode, normalizeStringMap } from "../codec/configCodec";
 
-function normalizeModulePayload(value: unknown): Module {
+interface ModuleRuntimeEntry {
+  id: string;
+  mode: Module["mode"];
+  is_mounted: boolean;
+  enabled: boolean;
+  source_path?: string;
+  rules: ModuleRules;
+}
+
+interface ModuleMetadata {
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+}
+
+function defaultModuleMetadata(moduleId: string): ModuleMetadata {
+  return {
+    name: moduleId,
+    version: "unknown",
+    author: "unknown",
+    description: "No description",
+  };
+}
+
+function normalizeModuleRuntimeEntry(value: unknown): ModuleRuntimeEntry {
   const payload = isRecord(value) ? value : {};
   const rulesPayload = isRecord(payload.rules) ? payload.rules : {};
   return {
     id: isString(payload.id) ? payload.id : "",
-    name: isString(payload.name)
-      ? payload.name
-      : isString(payload.id)
-        ? payload.id
-        : "",
-    version: isString(payload.version) ? payload.version : "unknown",
-    author: isString(payload.author) ? payload.author : "unknown",
-    description: isString(payload.description)
-      ? payload.description
-      : "No description",
     mode: normalizeMountMode(payload.mode),
     is_mounted: isBoolean(payload.is_mounted) ? payload.is_mounted : false,
     enabled: isBoolean(payload.enabled) ? payload.enabled : true,
@@ -30,6 +45,60 @@ function normalizeModulePayload(value: unknown): Module {
       default_mode: normalizeMountMode(rulesPayload.default_mode),
       paths: normalizeStringMap(rulesPayload.paths),
     },
+  };
+}
+
+function parseModuleMetadata(raw: string, moduleId: string): ModuleMetadata {
+  const metadata = defaultModuleMetadata(moduleId);
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+    const separator = trimmed.indexOf("=");
+    if (separator < 0) {
+      continue;
+    }
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim();
+    if (!value) {
+      continue;
+    }
+    if (key === "name") metadata.name = value;
+    else if (key === "version") metadata.version = value;
+    else if (key === "author") metadata.author = value;
+    else if (key === "description") metadata.description = value;
+  }
+  return metadata;
+}
+
+async function loadModuleMetadata(
+  entry: ModuleRuntimeEntry,
+): Promise<ModuleMetadata> {
+  if (!entry.source_path?.trim()) {
+    return defaultModuleMetadata(entry.id);
+  }
+
+  try {
+    const raw = await readModuleProp(entry.source_path.trim());
+    return parseModuleMetadata(raw, entry.id);
+  } catch {
+    return defaultModuleMetadata(entry.id);
+  }
+}
+
+function toModule(entry: ModuleRuntimeEntry, metadata: ModuleMetadata): Module {
+  return {
+    id: entry.id,
+    name: metadata.name,
+    version: metadata.version,
+    author: metadata.author,
+    description: metadata.description,
+    mode: entry.mode,
+    is_mounted: entry.is_mounted,
+    enabled: entry.enabled,
+    source_path: entry.source_path,
+    rules: entry.rules,
   };
 }
 
@@ -58,7 +127,10 @@ export async function scanModules(path?: string): Promise<Module[]> {
   if (!Array.isArray(payload)) {
     throw new Error("modules payload is invalid");
   }
-  return payload.map(normalizeModulePayload);
+
+  const entries = payload.map(normalizeModuleRuntimeEntry);
+  const metadataList = await Promise.all(entries.map(loadModuleMetadata));
+  return entries.map((entry, index) => toModule(entry, metadataList[index]));
 }
 
 export async function saveModules(modules: Module[]): Promise<void> {

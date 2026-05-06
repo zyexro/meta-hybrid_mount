@@ -32,10 +32,6 @@ use crate::{
 #[derive(Debug, Clone, Serialize)]
 pub struct ModuleListEntry {
     pub id: String,
-    pub name: String,
-    pub version: String,
-    pub author: String,
-    pub description: String,
     pub mode: MountMode,
     pub is_mounted: bool,
     pub enabled: bool,
@@ -121,7 +117,6 @@ fn build_scanned_modules_payload(
             continue;
         }
 
-        let metadata = read_module_metadata(&module_path, &id);
         let rules = load_module_rules(config, &id);
         let enabled = !inventory::has_mount_block_marker(&module_path);
         let runtime_mode = enabled.then(|| module_runtime_mode(&id, state)).flatten();
@@ -129,10 +124,6 @@ fn build_scanned_modules_payload(
 
         modules.push(ModuleListEntry {
             id,
-            name: metadata.name,
-            version: metadata.version,
-            author: metadata.author,
-            description: metadata.description,
             mode,
             is_mounted: runtime_mode.is_some(),
             enabled,
@@ -158,7 +149,6 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
         .filter(|id| !inventory::is_reserved_module_dir(id))
         .map(|id| {
             let source_path = config.moduledir.join(&id);
-            let metadata = read_module_metadata(&source_path, &id);
             let rules = load_module_rules(config, &id);
             let runtime_mode = module_runtime_mode(&id, state);
             let mode = runtime_mode.unwrap_or(rules.default_mode);
@@ -166,10 +156,6 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
 
             ModuleListEntry {
                 id,
-                name: metadata.name,
-                version: metadata.version,
-                author: metadata.author,
-                description: metadata.description,
                 mode,
                 is_mounted: runtime_mode.is_some(),
                 enabled,
@@ -334,5 +320,49 @@ fn default_module_metadata(module_id: &str) -> ModuleMetadata {
         version: "unknown".to_string(),
         author: "unknown".to_string(),
         description: "No description".to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::{
+        conf::schema::Config,
+        core::runtime_state::RuntimeState,
+        domain::{DefaultMode, MountMode},
+    };
+
+    #[test]
+    fn runtime_modules_payload_keeps_runtime_and_rules_without_metadata() {
+        let mut config = Config {
+            moduledir: PathBuf::from("/modules"),
+            default_mode: DefaultMode::Magic,
+            ..Default::default()
+        };
+        config.rules.insert(
+            "alpha".to_string(),
+            ModuleRules {
+                default_mode: MountMode::Overlay,
+                ..Default::default()
+            },
+        );
+
+        let state = RuntimeState {
+            overlay_modules: vec!["alpha".to_string()],
+            ..Default::default()
+        };
+
+        let modules = build_runtime_modules_payload(&config, &state);
+        assert_eq!(modules.len(), 1);
+
+        let module = &modules[0];
+        assert_eq!(module.id, "alpha");
+        assert_eq!(module.mode, MountMode::Overlay);
+        assert!(module.is_mounted);
+        assert!(module.enabled);
+        assert_eq!(module.source_path, PathBuf::from("/modules/alpha"));
+        assert_eq!(module.rules.default_mode, MountMode::Overlay);
     }
 }
