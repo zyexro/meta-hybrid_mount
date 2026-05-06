@@ -38,6 +38,12 @@ pub enum DaemonCommand {
     ApiConfigSet {
         config: serde_json::Value,
     },
+    ApiConfigPatch {
+        patch: serde_json::Value,
+        #[serde(default)]
+        apply_runtime: bool,
+    },
+    ApiConfigReset,
     ApiModulesList {
         path: Option<PathBuf>,
     },
@@ -46,6 +52,15 @@ pub enum DaemonCommand {
     },
     ApiLkm,
     ApiHooks,
+    ApiKernelUname,
+    ApiOpenUrl {
+        url: String,
+    },
+    ApiReboot,
+    ApiKasumiMapsAdd {
+        rule: serde_json::Value,
+    },
+    ApiKasumiMapsClear,
     KasumiStatus,
     KasumiList,
     KasumiVersion,

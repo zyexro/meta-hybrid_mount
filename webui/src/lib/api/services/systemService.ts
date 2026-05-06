@@ -4,7 +4,6 @@ import {
   defaultVersion,
   hasExecBridge,
   runHybridMountJson,
-  runCommandExpectOk,
 } from "../core/bridge";
 import { isBoolean, isRecord, isString, isStringArray } from "../core/guards";
 import { shellEscapeDoubleQuoted } from "../core/shell";
@@ -74,7 +73,7 @@ export async function getVersion(): Promise<string> {
 }
 
 export async function reboot(): Promise<void> {
-  await runCommandExpectOk("reboot");
+  await runHybridMountJson("api reboot", PATHS.BINARY);
 }
 
 export async function openLink(url: string): Promise<void> {
@@ -83,7 +82,5 @@ export async function openLink(url: string): Promise<void> {
     return;
   }
   const safeUrl = shellEscapeDoubleQuoted(url);
-  await runCommandExpectOk(
-    `am start -a android.intent.action.VIEW -d "${safeUrl}"`,
-  );
+  await runHybridMountJson(`api open-url "${safeUrl}"`, PATHS.BINARY);
 }

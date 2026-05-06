@@ -63,6 +63,18 @@ pub fn run(cli: &Cli, command: &Commands) -> Result<()> {
                         .context("Failed to parse config JSON payload")?,
                 },
             ),
+            ApiCommands::ConfigPatch {
+                patch,
+                apply_runtime,
+            } => dispatch(
+                cli,
+                DaemonCommand::ApiConfigPatch {
+                    patch: serde_json::from_str(patch)
+                        .context("Failed to parse config patch JSON payload")?,
+                    apply_runtime: *apply_runtime,
+                },
+            ),
+            ApiCommands::ConfigReset => dispatch(cli, DaemonCommand::ApiConfigReset),
             ApiCommands::ModulesList { path } => {
                 dispatch(cli, DaemonCommand::ApiModulesList { path: path.clone() })
             }
@@ -76,9 +88,22 @@ pub fn run(cli: &Cli, command: &Commands) -> Result<()> {
             ApiCommands::Lkm => dispatch(cli, DaemonCommand::ApiLkm),
             ApiCommands::Features => cli_handlers::handle_api_features(),
             ApiCommands::Hooks => dispatch(cli, DaemonCommand::ApiHooks),
+            ApiCommands::KernelUname => dispatch(cli, DaemonCommand::ApiKernelUname),
+            ApiCommands::OpenUrl { url } => {
+                dispatch(cli, DaemonCommand::ApiOpenUrl { url: url.clone() })
+            }
+            ApiCommands::Reboot => dispatch(cli, DaemonCommand::ApiReboot),
+            ApiCommands::KasumiMapsAdd { rule } => dispatch(
+                cli,
+                DaemonCommand::ApiKasumiMapsAdd {
+                    rule: serde_json::from_str(rule)
+                        .context("Failed to parse Kasumi maps rule JSON payload")?,
+                },
+            ),
+            ApiCommands::KasumiMapsClear => dispatch(cli, DaemonCommand::ApiKasumiMapsClear),
         }),
         Commands::Daemon { command } => match command {
-            DaemonCommands::Launch => startup::run(cli),
+            DaemonCommands::Launch => startup::run_and_serve(cli),
             DaemonCommands::Serve => {
                 let config = loader::load_config(cli)?;
                 daemon::serve(config)

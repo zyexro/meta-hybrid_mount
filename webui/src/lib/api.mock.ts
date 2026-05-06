@@ -179,6 +179,9 @@ function buildMockKasumiStatus(): KasumiStatus {
 }
 
 export const MockAPI: AppAPI = {
+  async wakeDaemon(): Promise<void> {
+    await delay(20);
+  },
   async loadConfig(): Promise<AppConfig> {
     await delay(300);
     return { ...DEFAULT_CONFIG };
@@ -326,8 +329,9 @@ export const MockAPI: AppAPI = {
     mockState.kasumi.uname.release = uname.release;
     mockState.kasumi.uname.version = uname.version;
   },
-  async clearKasumiUname(): Promise<void> {
+  async clearKasumiUname(mode: "scoped" | "global" = "scoped"): Promise<void> {
     await delay(160);
+    mockState.kasumi.unameMode = mode;
     mockState.kasumi.uname = {
       sysname: "",
       nodename: "",

@@ -23,6 +23,15 @@ use crate::{
 mod recovery;
 
 pub fn run(cli: &Cli) -> Result<()> {
+    run_mount(cli).map(|_| ())
+}
+
+pub fn run_and_serve(cli: &Cli) -> Result<()> {
+    let config = run_mount(cli)?;
+    daemon::serve(config)
+}
+
+pub fn run_mount(cli: &Cli) -> Result<crate::conf::config::Config> {
     sys::fs::ensure_dir_exists(defs::RUN_DIR)
         .with_context(|| format!("Failed to create run directory: {}", defs::RUN_DIR))?;
 
@@ -71,6 +80,5 @@ pub fn run(cli: &Cli) -> Result<()> {
         crate::scoped_log!(warn, "startup", "config: disable_umount=true");
     }
 
-    let config = recovery::run(config)?;
-    daemon::serve(config)
+    recovery::run(config)
 }

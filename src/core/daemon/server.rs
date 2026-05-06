@@ -20,6 +20,7 @@ use std::{
         net::{UnixListener, UnixStream},
     },
     path::{Path, PathBuf},
+    process::Command,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -45,6 +46,8 @@ use crate::{
 };
 
 pub fn serve(_config: Config) -> Result<()> {
+    fs::create_dir_all(defs::RUN_DIR)
+        .with_context(|| format!("Failed to create daemon run directory {}", defs::RUN_DIR))?;
     cleanup_stale_runtime_files()?;
     let listener = UnixListener::bind(defs::SOCKET_FILE)
         .with_context(|| format!("Failed to bind daemon socket {}", defs::SOCKET_FILE))?;
@@ -122,6 +125,85 @@ fn load_runtime_config(config_path: &Path) -> Result<Config> {
         .with_context(|| format!("Failed to load config from path: {}", config_path.display()))
 }
 
+fn patch_config_file(config_path: &Path, patch: Value) -> Result<Config> {
+    let config = load_runtime_config(config_path)?;
+    let mut payload = serde_json::to_value(config).context("Failed to encode current config")?;
+    merge_json(&mut payload, patch);
+
+    let config: Config =
+        serde_json::from_value(payload).context("Failed to decode patched config")?;
+    config.save_to_file(config_path)?;
+    Ok(config)
+}
+
+fn merge_json(target: &mut Value, patch: Value) {
+    match (target, patch) {
+        (Value::Object(target), Value::Object(patch)) => {
+            for (key, value) in patch {
+                match target.get_mut(&key) {
+                    Some(existing) => merge_json(existing, value),
+                    None => {
+                        target.insert(key, value);
+                    }
+                }
+            }
+        }
+        (target, patch) => {
+            *target = patch;
+        }
+    }
+}
+
+fn read_kernel_uname_payload() -> Result<Value> {
+    let release = fs::read_to_string("/proc/sys/kernel/osrelease")
+        .context("failed to read /proc/sys/kernel/osrelease")?
+        .trim()
+        .to_string();
+    let version = fs::read_to_string("/proc/sys/kernel/version")
+        .context("failed to read /proc/sys/kernel/version")?
+        .trim()
+        .to_string();
+    to_value(&json!({ "release": release, "version": version }))
+}
+
+fn open_url(url: &str) -> Result<()> {
+    let status = Command::new("am")
+        .arg("start")
+        .arg("-a")
+        .arg("android.intent.action.VIEW")
+        .arg("-d")
+        .arg(url)
+        .status()
+        .context("Failed to start Android VIEW intent")?;
+    if !status.success() {
+        bail!("am start exited with status {status}");
+    }
+    Ok(())
+}
+
+fn reboot_device() -> Result<()> {
+    let status = Command::new("reboot")
+        .status()
+        .context("Failed to execute reboot")?;
+    if !status.success() {
+        bail!("reboot exited with status {status}");
+    }
+    Ok(())
+}
+
+fn add_kasumi_maps_config_rule(config_path: &Path, rule: Value) -> Result<Config> {
+    let mut config = load_runtime_config(config_path)?;
+    let rule: crate::conf::schema::KasumiMapsRuleConfig =
+        serde_json::from_value(rule).context("Failed to decode Kasumi maps rule")?;
+    config
+        .kasumi
+        .maps_rules
+        .retain(|item| item.target_ino != rule.target_ino || item.target_dev != rule.target_dev);
+    config.kasumi.maps_rules.push(rule);
+    config.save_to_file(config_path)?;
+    Ok(config)
+}
+
 fn dispatch_command(
     config: &Config,
     config_path: &Path,
@@ -157,7 +239,35 @@ fn dispatch_command(
             let config: Config =
                 serde_json::from_value(payload).context("Failed to decode config payload")?;
             config.save_to_file(config_path)?;
-            to_value(&json!({ "saved": true }))
+            refresh_runtime_snapshot(&config, state)?;
+            to_value(&json!({ "saved": true, "config": config }))
+        }
+        DaemonCommand::ApiConfigPatch {
+            patch,
+            apply_runtime,
+        } => {
+            let config = patch_config_file(config_path, patch)?;
+            let applied = if apply_runtime {
+                let applied = kasumi_mount::apply_runtime_config(&config)?;
+                kasumi::invalidate_status_cache();
+                applied
+            } else {
+                false
+            };
+            refresh_runtime_snapshot(&config, state)?;
+            to_value(&json!({
+                "saved": true,
+                "applied": applied,
+                "config": config,
+            }))
+        }
+        DaemonCommand::ApiConfigReset => {
+            let config = Config::default();
+            config.save_to_file(config_path)?;
+            kasumi_mount::apply_runtime_config(&config)?;
+            kasumi::invalidate_status_cache();
+            refresh_runtime_snapshot(&config, state)?;
+            to_value(&json!({ "saved": true, "config": config }))
         }
         DaemonCommand::ApiModulesList { path } => {
             let guard = state.lock().expect("daemon state poisoned");
@@ -168,12 +278,49 @@ fn dispatch_command(
             )?)
         }
         DaemonCommand::ApiModulesApply { modules } => {
-            to_value(&api::apply_modules_payload(config_path, &modules)?)
+            let payload = api::apply_modules_payload(config_path, &modules)?;
+            let config = load_runtime_config(config_path)?;
+            refresh_runtime_snapshot(&config, state)?;
+            to_value(&payload)
         }
         DaemonCommand::ApiLkm => to_value(&api::build_lkm_payload(config)),
         DaemonCommand::ApiHooks => {
             kasumi_mount::require_live(config, "read Kasumi hooks")?;
             to_value(&kasumi_mount::hook_lines()?)
+        }
+        DaemonCommand::ApiKernelUname => to_value(&read_kernel_uname_payload()?),
+        DaemonCommand::ApiOpenUrl { url } => {
+            open_url(&url)?;
+            to_value(&json!({ "opened": true }))
+        }
+        DaemonCommand::ApiReboot => {
+            reboot_device()?;
+            to_value(&json!({ "reboot": true }))
+        }
+        DaemonCommand::ApiKasumiMapsAdd { rule } => {
+            let updated = add_kasumi_maps_config_rule(config_path, rule)?;
+            kasumi_mount::apply_runtime_config(&updated)?;
+            kasumi::invalidate_status_cache();
+            refresh_runtime_snapshot(&updated, state)?;
+            let count = updated.kasumi.maps_rules.len();
+            to_value(&json!({
+                "saved": true,
+                "config": updated,
+                "count": count,
+            }))
+        }
+        DaemonCommand::ApiKasumiMapsClear => {
+            let mut updated = load_runtime_config(config_path)?;
+            updated.kasumi.maps_rules.clear();
+            updated.save_to_file(config_path)?;
+            kasumi_mount::apply_runtime_config(&updated)?;
+            kasumi::invalidate_status_cache();
+            refresh_runtime_snapshot(&updated, state)?;
+            to_value(&json!({
+                "saved": true,
+                "config": updated,
+                "count": 0,
+            }))
         }
         DaemonCommand::KasumiStatus => {
             let runtime_state = state.lock().expect("daemon state poisoned").clone();

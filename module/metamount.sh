@@ -34,29 +34,12 @@ cleanup_runtime_files() {
 
 chmod 755 "$BINARY"
 cleanup_runtime_files
-nohup "$BINARY" daemon launch >/dev/null 2>&1 &
-DAEMON_PID=$!
 
-WAIT_COUNT=0
-while [ "$WAIT_COUNT" -lt 50 ]; do
-  if [ -S "$SOCKET_FILE" ]; then
-    if [ -x /data/adb/ksud ]; then
-      /data/adb/ksud kernel notify-module-mounted
-    fi
-    exit 0
-  fi
-  if ! kill -0 "$DAEMON_PID" 2>/dev/null; then
-    wait "$DAEMON_PID"
-    exit $?
-  fi
-  WAIT_COUNT=$((WAIT_COUNT + 1))
-  sleep 0.1
-done
+"$BINARY"
+STATUS=$?
 
-if kill -0 "$DAEMON_PID" 2>/dev/null; then
-  echo "ERROR: daemon did not create socket in time"
-  exit 1
+if [ "$STATUS" -eq 0 ] && [ -x /data/adb/ksud ]; then
+  /data/adb/ksud kernel notify-module-mounted
 fi
 
-wait "$DAEMON_PID"
-exit $?
+exit "$STATUS"

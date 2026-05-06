@@ -229,7 +229,7 @@ export default function KasumiTab() {
 
   async function clearUname() {
     await kasumiService.setKasumiUnameMode(forms.unameMode);
-    await kasumiService.clearKasumiUname();
+    await kasumiService.clearKasumiUname(forms.unameMode);
   }
 
   onMount(() => {

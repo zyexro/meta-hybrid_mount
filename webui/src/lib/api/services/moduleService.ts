@@ -3,7 +3,6 @@ import type { Module, ModuleRules } from "../../types";
 import { runHybridMountJson } from "../core/bridge";
 import { isBoolean, isRecord, isString } from "../core/guards";
 import { shellEscapeDoubleQuoted } from "../core/shell";
-import { loadConfigFromFile } from "../repos/configRepo";
 import { normalizeMountMode, normalizeStringMap } from "../codec/configCodec";
 
 function normalizeModulePayload(value: unknown): Module {
@@ -70,12 +69,11 @@ export async function saveModuleRules(
   moduleId: string,
   rules: ModuleRules,
 ): Promise<void> {
-  const config = await loadConfigFromFile();
   const module = {
     id: moduleId,
     enabled: true,
     rules: {
-      default_mode: normalizeMountMode(rules.default_mode, config.default_mode),
+      default_mode: normalizeMountMode(rules.default_mode),
       paths: normalizeStringMap(rules.paths),
     },
   } as Module;
@@ -85,15 +83,11 @@ export async function saveModuleRules(
 export async function saveAllModuleRules(
   rules: Record<string, ModuleRules>,
 ): Promise<void> {
-  const config = await loadConfigFromFile();
   const payload = Object.entries(rules).map(([moduleId, moduleRules]) => ({
     id: moduleId,
     enabled: true,
     rules: {
-      default_mode: normalizeMountMode(
-        moduleRules.default_mode,
-        config.default_mode,
-      ),
+      default_mode: normalizeMountMode(moduleRules.default_mode),
       paths: normalizeStringMap(moduleRules.paths),
     },
   })) as Module[];

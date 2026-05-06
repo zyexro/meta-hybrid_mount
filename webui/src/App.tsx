@@ -14,6 +14,7 @@ import { configStore } from "./lib/stores/configStore";
 import { sysStore } from "./lib/stores/sysStore";
 import { kasumiStore } from "./lib/stores/kasumiStore";
 import { moduleStore } from "./lib/stores/moduleStore";
+import { API } from "./lib/api";
 import TopBar from "./components/TopBar";
 import NavBar from "./components/NavBar";
 import Toast from "./components/Toast";
@@ -191,6 +192,7 @@ export default function App() {
   async function initializeApp() {
     try {
       await uiStore.init();
+      await API.wakeDaemon();
       const statusLoad = sysStore.ensureStatusLoaded();
       const kasumiLoad = kasumiStore.ensureStatusLoaded();
       void configStore.loadConfig();
@@ -207,6 +209,11 @@ export default function App() {
       });
     } catch (e) {
       console.error("App initialization failed", e);
+      uiStore.showToast(
+        e instanceof Error ? e.message : "App initialization failed",
+        "error",
+      );
+      setInitialDataReady(true);
       return;
     }
   }

@@ -122,6 +122,14 @@ pub enum ApiCommands {
     ConfigSet {
         config: String,
     },
+    #[command(name = "config-patch")]
+    ConfigPatch {
+        #[arg(long = "apply-runtime")]
+        apply_runtime: bool,
+        patch: String,
+    },
+    #[command(name = "config-reset")]
+    ConfigReset,
     #[command(name = "modules-list")]
     ModulesList {
         #[arg(long)]
@@ -134,6 +142,19 @@ pub enum ApiCommands {
     Lkm,
     Features,
     Hooks,
+    #[command(name = "kernel-uname")]
+    KernelUname,
+    #[command(name = "open-url")]
+    OpenUrl {
+        url: String,
+    },
+    Reboot,
+    #[command(name = "kasumi-maps-add")]
+    KasumiMapsAdd {
+        rule: String,
+    },
+    #[command(name = "kasumi-maps-clear")]
+    KasumiMapsClear,
 }
 
 #[derive(Subcommand, Debug)]

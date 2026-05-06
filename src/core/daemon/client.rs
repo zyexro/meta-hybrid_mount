@@ -15,7 +15,7 @@
 use std::{
     io::{BufRead, BufReader, Write},
     os::unix::net::UnixStream,
-    process::Command,
+    process::{Command, Stdio},
     thread,
     time::Duration,
 };
@@ -98,6 +98,13 @@ fn connect_socket() -> Result<UnixStream> {
 }
 
 fn should_wake_daemon(err: &anyhow::Error) -> bool {
+    if matches!(
+        std::env::var("HYBRID_MOUNT_NO_DAEMON_AUTOWAKE").as_deref(),
+        Ok("1") | Ok("true") | Ok("yes")
+    ) {
+        return false;
+    }
+
     let text = format!("{err:#}");
     text.contains("No such file or directory") || text.contains("Connection refused")
 }
@@ -108,13 +115,28 @@ fn wake_daemon(cli: &Cli) -> Result<()> {
     if let Some(config) = &cli.config {
         command.arg("--config").arg(config);
     }
-    command.arg("daemon").arg("launch");
-    let status = command.status().context("Failed to spawn daemon launch")?;
-    if !status.success() {
-        bail!("daemon launch exited with status {status}");
+    command
+        .arg("daemon")
+        .arg("serve")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    let mut child = command.spawn().context("Failed to spawn daemon serve")?;
+    for _ in 0..30 {
+        if connect_socket().is_ok() {
+            return Ok(());
+        }
+        if let Some(status) = child
+            .try_wait()
+            .context("Failed to poll daemon serve process")?
+        {
+            bail!("daemon serve exited with status {status}");
+        }
+        thread::sleep(Duration::from_millis(100));
     }
-    thread::sleep(Duration::from_millis(300));
-    Ok(())
+
+    bail!("daemon serve did not create socket in time")
 }
 
 fn print_json<T: Serialize>(payload: &T) -> Result<()> {

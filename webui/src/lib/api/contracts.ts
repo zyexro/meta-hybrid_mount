@@ -10,6 +10,7 @@ import type {
 } from "../types";
 
 export interface AppAPI {
+  wakeDaemon: () => Promise<void>;
   loadConfig: () => Promise<AppConfig>;
   saveConfig: (config: AppConfig) => Promise<void>;
   resetConfig: () => Promise<void>;
@@ -32,7 +33,7 @@ export interface AppAPI {
     mode: "scoped" | "global",
     uname: Pick<KasumiUnameConfig, "release" | "version">,
   ) => Promise<void>;
-  clearKasumiUname: () => Promise<void>;
+  clearKasumiUname: (mode?: "scoped" | "global") => Promise<void>;
   restoreKasumiUnameGlobal: () => Promise<void>;
   setKasumiCmdline: (value: string) => Promise<void>;
   clearKasumiCmdline: () => Promise<void>;

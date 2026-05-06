@@ -1,5 +1,6 @@
 import { APP_VERSION } from "../../constants_gen";
 import { AppError } from "./error";
+import { shellEscapeDoubleQuoted } from "./shell";
 
 interface KsuExecResult {
   errno: number;
@@ -28,6 +29,12 @@ if (hasKsuBridge()) {
 export const shouldUseMock = import.meta.env.MODE === "test";
 export const defaultVersion = APP_VERSION;
 export const hasExecBridge = Boolean(ksuExec);
+const NO_DAEMON_AUTOWAKE = "HYBRID_MOUNT_NO_DAEMON_AUTOWAKE=1";
+const DAEMON_READY_ATTEMPTS = 40;
+const DAEMON_READY_INTERVAL_MS = 100;
+
+let daemonSession: Promise<KsuExecResult> | null = null;
+let daemonReady: Promise<void> | null = null;
 
 function requireExec(): KsuModule["exec"] {
   if (!ksuExec) throw new AppError("No KSU environment");
@@ -43,6 +50,68 @@ export async function runCommandExpectOk(command: string): Promise<string> {
   const { errno, stdout, stderr } = await runCommand(command);
   if (errno === 0) return stdout;
   throw new AppError(stderr || `command failed: ${command}`, errno);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function hybridMountCommand(binaryPath: string, args: string): string {
+  return `"${shellEscapeDoubleQuoted(binaryPath)}" ${args}`;
+}
+
+function hybridMountDaemonCommand(binaryPath: string, args: string): string {
+  return `${NO_DAEMON_AUTOWAKE} ${hybridMountCommand(binaryPath, args)}`;
+}
+
+function startDaemonSession(binaryPath: string) {
+  if (daemonSession) return;
+
+  daemonSession = runCommand(hybridMountCommand(binaryPath, "daemon serve"))
+    .catch((error) => {
+      console.error("hybrid-mount daemon session failed", error);
+      return {
+        errno: 1,
+        stdout: "",
+        stderr: error instanceof Error ? error.message : String(error),
+      };
+    })
+    .finally(() => {
+      daemonSession = null;
+      daemonReady = null;
+    });
+}
+
+async function pingDaemon(binaryPath: string): Promise<boolean> {
+  try {
+    const { errno, stdout } = await runCommand(
+      hybridMountDaemonCommand(binaryPath, "daemon ping"),
+    );
+    if (errno !== 0) return false;
+    parseHybridMountJsonOutput(stdout);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function ensureDaemonAwake(binaryPath: string): Promise<void> {
+  if (shouldUseMock || !hasExecBridge) return;
+  if (daemonReady) return daemonReady;
+
+  daemonReady = (async () => {
+    startDaemonSession(binaryPath);
+    for (let attempt = 0; attempt < DAEMON_READY_ATTEMPTS; attempt += 1) {
+      if (await pingDaemon(binaryPath)) return;
+      await sleep(DAEMON_READY_INTERVAL_MS);
+    }
+    throw new AppError("hybrid-mount daemon did not become ready");
+  })().catch((error) => {
+    daemonReady = null;
+    throw error;
+  });
+
+  return daemonReady;
 }
 
 function getStructuredError(payload: unknown): string | null {
@@ -82,6 +151,8 @@ export async function runHybridMountJson(
   args: string,
   binaryPath: string,
 ): Promise<unknown> {
-  const raw = await runCommandExpectOk(`${binaryPath} ${args}`);
+  const raw = await runCommandExpectOk(
+    hybridMountDaemonCommand(binaryPath, args),
+  );
   return parseHybridMountJsonOutput(raw);
 }

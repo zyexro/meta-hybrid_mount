@@ -1,5 +1,10 @@
 import { AppError } from "./api/core/error";
-import { hasExecBridge, shouldUseMock } from "./api/core/bridge";
+import { PATHS } from "./constants";
+import {
+  ensureDaemonAwake,
+  hasExecBridge,
+  shouldUseMock,
+} from "./api/core/bridge";
 import { shellEscapeDoubleQuoted } from "./api/core/shell";
 import {
   getStorageUsage,
@@ -10,7 +15,7 @@ import {
 } from "./api/services/systemService";
 import {
   loadConfigFromFile,
-  createDefaultConfig,
+  resetConfigFile,
   saveConfigToFile,
 } from "./api/repos/configRepo";
 import {
@@ -24,10 +29,11 @@ import { MockAPI } from "./api.mock";
 import type { AppAPI } from "./api/contracts";
 
 const RealAPI: AppAPI = {
+  wakeDaemon: () => ensureDaemonAwake(PATHS.BINARY),
   loadConfig: loadConfigFromFile,
   saveConfig: saveConfigToFile,
   resetConfig: async () => {
-    await saveConfigToFile(await createDefaultConfig());
+    await resetConfigFile();
   },
   scanModules,
   saveModules,
