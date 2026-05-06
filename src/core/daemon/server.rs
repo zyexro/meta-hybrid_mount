@@ -572,10 +572,10 @@ fn dispatch_command(
             to_value(&json!({ "saved": true, "config": config }))
         }
         DaemonCommand::ApiModulesList { path } => {
-            let guard = state.lock().expect("daemon state poisoned");
+            let snapshot = state.lock().expect("daemon state poisoned").clone();
             to_value(&api::build_modules_payload(
                 config,
-                &guard,
+                &snapshot,
                 path.as_deref(),
             )?)
         }

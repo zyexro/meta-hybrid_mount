@@ -90,11 +90,17 @@ pub fn build_modules_payload(
                 source_dir.display()
             )
         })?;
-        let module_path = entry.path();
-        if !module_path.is_dir() {
+        let file_type = entry.file_type().with_context(|| {
+            format!(
+                "failed to read module entry type {}",
+                entry.path().display()
+            )
+        })?;
+        if !file_type.is_dir() {
             continue;
         }
 
+        let module_path = entry.path();
         let id = entry.file_name().to_string_lossy().into_owned();
         if inventory::is_reserved_module_dir(&id) {
             continue;
@@ -202,6 +208,13 @@ fn module_runtime_mode(module_id: &str, state: &RuntimeState) -> Option<MountMod
 
 fn read_module_metadata(module_path: &Path, module_id: &str) -> ModuleMetadata {
     let prop_path = module_path.join("module.prop");
+    let Ok(metadata) = fs::symlink_metadata(&prop_path) else {
+        return default_module_metadata(module_id);
+    };
+    if !metadata.file_type().is_file() {
+        return default_module_metadata(module_id);
+    }
+
     let Some(raw) = fs::read_to_string(&prop_path).ok() else {
         return default_module_metadata(module_id);
     };

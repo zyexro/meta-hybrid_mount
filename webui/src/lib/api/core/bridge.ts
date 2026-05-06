@@ -37,6 +37,8 @@ export const shouldUseMock = import.meta.env.MODE === "test";
 export const defaultVersion = APP_VERSION;
 export const hasExecBridge = Boolean(ksuExec);
 const DAEMON_WAKE_TIMEOUT_MS = 5000;
+const DAEMON_HTTP_TIMEOUT_MS = 30000;
+const DAEMON_MODULES_TIMEOUT_MS = 15000;
 
 let daemonReady: Promise<void> | null = null;
 let webuiSession: WebuiSession | null = null;
@@ -147,15 +149,35 @@ async function runDaemonHttp(
   session: WebuiSession,
   command: DaemonCommandPayload,
 ): Promise<unknown> {
-  const response = await fetch(`${session.base_url}/rpc`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${session.token}`,
-    },
-    body: JSON.stringify({ command }),
-  });
-  const text = await response.text();
+  const controller = new AbortController();
+  const timeoutMs =
+    command.type === "api-modules-list"
+      ? DAEMON_MODULES_TIMEOUT_MS
+      : DAEMON_HTTP_TIMEOUT_MS;
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  let text: string;
+
+  try {
+    response = await fetch(`${session.base_url}/rpc`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify({ command }),
+      signal: controller.signal,
+    });
+    text = await response.text();
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new AppError(`daemon HTTP request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
+
   const payload = parseHybridMountJsonOutput(text);
   if (!response.ok) {
     throw new AppError(
@@ -378,6 +400,12 @@ export async function runHybridMountJson(
       return await runDaemonHttp(session, command);
     } catch (error) {
       lastError = error;
+      if (
+        error instanceof AppError &&
+        error.message.includes("daemon HTTP request timed out")
+      ) {
+        throw error;
+      }
       console.debug("daemon HTTP bridge request failed", error);
       daemonReady = null;
       webuiSession = null;
