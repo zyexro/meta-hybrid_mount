@@ -13,7 +13,9 @@
 // limitations under the License.
 
 use std::{
-    fs, io,
+    collections::BTreeSet,
+    fs,
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 
@@ -70,12 +72,25 @@ struct ModuleMetadata {
     description: String,
 }
 
+const MAX_MODULE_PROP_BYTES: u64 = 64 * 1024;
+
 pub fn build_modules_payload(
     config: &Config,
     state: &RuntimeState,
     path: Option<&Path>,
 ) -> Result<Vec<ModuleListEntry>> {
-    let source_dir = path.unwrap_or(config.moduledir.as_path());
+    if let Some(source_dir) = path {
+        return build_scanned_modules_payload(config, state, source_dir);
+    }
+
+    Ok(build_runtime_modules_payload(config, state))
+}
+
+fn build_scanned_modules_payload(
+    config: &Config,
+    state: &RuntimeState,
+    source_dir: &Path,
+) -> Result<Vec<ModuleListEntry>> {
     if !source_dir.exists() {
         return Ok(Vec::new());
     }
@@ -128,6 +143,41 @@ pub fn build_modules_payload(
 
     modules.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(modules)
+}
+
+fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<ModuleListEntry> {
+    let mut ids = BTreeSet::new();
+    ids.extend(state.overlay_modules.iter().cloned());
+    ids.extend(state.magic_modules.iter().cloned());
+    ids.extend(state.kasumi_modules.iter().cloned());
+    ids.extend(state.skip_mount_modules.iter().cloned());
+    ids.extend(state.mount_error_modules.iter().cloned());
+    ids.extend(config.rules.keys().cloned());
+
+    ids.into_iter()
+        .filter(|id| !inventory::is_reserved_module_dir(id))
+        .map(|id| {
+            let source_path = config.moduledir.join(&id);
+            let metadata = read_module_metadata(&source_path, &id);
+            let rules = load_module_rules(config, &id);
+            let runtime_mode = module_runtime_mode(&id, state);
+            let mode = runtime_mode.unwrap_or(rules.default_mode);
+            let enabled = !state.skip_mount_modules.iter().any(|item| item == &id);
+
+            ModuleListEntry {
+                id,
+                name: metadata.name,
+                version: metadata.version,
+                author: metadata.author,
+                description: metadata.description,
+                mode,
+                is_mounted: runtime_mode.is_some(),
+                enabled,
+                source_path,
+                rules,
+            }
+        })
+        .collect()
 }
 
 pub fn apply_modules_payload(
@@ -214,9 +264,32 @@ fn read_module_metadata(module_path: &Path, module_id: &str) -> ModuleMetadata {
     if !metadata.file_type().is_file() {
         return default_module_metadata(module_id);
     }
-
-    let Some(raw) = fs::read_to_string(&prop_path).ok() else {
+    if metadata.len() > MAX_MODULE_PROP_BYTES {
+        crate::scoped_log!(
+            warn,
+            "api:modules",
+            "metadata fallback: module={}, path={}, reason=module_prop_too_large, bytes={}, max_bytes={}",
+            module_id,
+            prop_path.display(),
+            metadata.len(),
+            MAX_MODULE_PROP_BYTES
+        );
         return default_module_metadata(module_id);
+    }
+
+    let raw = match read_module_prop_limited(&prop_path) {
+        Ok(raw) => raw,
+        Err(err) => {
+            crate::scoped_log!(
+                warn,
+                "api:modules",
+                "metadata fallback: module={}, path={}, reason=read_failed, error={}",
+                module_id,
+                prop_path.display(),
+                err
+            );
+            return default_module_metadata(module_id);
+        }
     };
 
     let mut metadata = default_module_metadata(module_id);
@@ -239,6 +312,20 @@ fn read_module_metadata(module_path: &Path, module_id: &str) -> ModuleMetadata {
     }
 
     metadata
+}
+
+fn read_module_prop_limited(prop_path: &Path) -> io::Result<String> {
+    let file = fs::File::open(prop_path)?;
+    let mut reader = file.take(MAX_MODULE_PROP_BYTES + 1);
+    let mut raw = String::new();
+    reader.read_to_string(&mut raw)?;
+    if raw.len() as u64 > MAX_MODULE_PROP_BYTES {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "module.prop is too large",
+        ));
+    }
+    Ok(raw)
 }
 
 fn default_module_metadata(module_id: &str) -> ModuleMetadata {
