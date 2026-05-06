@@ -161,7 +161,13 @@ export default function App() {
     if (preloadTimer !== undefined) {
       window.clearTimeout(preloadTimer);
     }
+    window.removeEventListener("pagehide", handlePageHide);
+    void API.shutdownDaemon();
   });
+
+  function handlePageHide() {
+    void API.shutdownDaemon();
+  }
 
   function startRoutePreload() {
     const pendingRoutes = visibleRoutes().filter(
@@ -186,6 +192,7 @@ export default function App() {
   }
 
   onMount(() => {
+    window.addEventListener("pagehide", handlePageHide);
     void initializeApp();
   });
 

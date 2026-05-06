@@ -162,6 +162,7 @@ pub enum DaemonCommands {
     Launch,
     Serve,
     Ping,
+    Stop,
     Status,
 }
 

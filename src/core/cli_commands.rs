@@ -109,6 +109,7 @@ pub fn run(cli: &Cli, command: &Commands) -> Result<()> {
                 daemon::serve(config)
             }
             DaemonCommands::Ping => run_api_command(|| dispatch(cli, DaemonCommand::Ping)),
+            DaemonCommands::Stop => run_api_command(|| dispatch(cli, DaemonCommand::Shutdown)),
             DaemonCommands::Status => run_api_command(|| dispatch(cli, DaemonCommand::Status)),
         },
         Commands::Lkm { command } => match command {

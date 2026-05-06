@@ -27,6 +27,7 @@ pub struct DaemonRequest {
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum DaemonCommand {
     Ping,
+    Shutdown,
     Status,
     ApiStorage,
     ApiMountStats,

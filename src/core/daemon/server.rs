@@ -72,7 +72,7 @@ pub fn serve(_config: Config) -> Result<()> {
     while !shutdown.load(Ordering::Relaxed) {
         match listener.accept() {
             Ok((mut stream, _addr)) => {
-                if let Err(err) = handle_stream(&state, &mut stream) {
+                if let Err(err) = handle_stream(&state, &shutdown, &mut stream) {
                     crate::scoped_log!(warn, "daemon", "request failed: error={:#}", err);
                     let payload = DaemonResponse::error(format!("{err:#}"));
                     let _ = write_response(&mut stream, &payload);
@@ -96,7 +96,11 @@ pub fn serve(_config: Config) -> Result<()> {
     Ok(())
 }
 
-fn handle_stream(state: &Arc<Mutex<RuntimeState>>, stream: &mut UnixStream) -> Result<()> {
+fn handle_stream(
+    state: &Arc<Mutex<RuntimeState>>,
+    shutdown: &Arc<AtomicBool>,
+    stream: &mut UnixStream,
+) -> Result<()> {
     let mut reader = BufReader::new(
         stream
             .try_clone()
@@ -116,7 +120,13 @@ fn handle_stream(state: &Arc<Mutex<RuntimeState>>, stream: &mut UnixStream) -> R
         .config_path
         .unwrap_or_else(|| PathBuf::from(defs::CONFIG_FILE));
     let effective_config = load_runtime_config(&config_path)?;
-    let payload = dispatch_command(&effective_config, &config_path, state, request.command)?;
+    let payload = dispatch_command(
+        &effective_config,
+        &config_path,
+        state,
+        shutdown,
+        request.command,
+    )?;
     write_response(stream, &DaemonResponse::success(payload))
 }
 
@@ -208,10 +218,15 @@ fn dispatch_command(
     config: &Config,
     config_path: &Path,
     state: &Arc<Mutex<RuntimeState>>,
+    shutdown: &Arc<AtomicBool>,
     command: DaemonCommand,
 ) -> Result<Value> {
     match command {
         DaemonCommand::Ping => to_value(&json!({ "status": "ok" })),
+        DaemonCommand::Shutdown => {
+            shutdown.store(true, Ordering::Relaxed);
+            to_value(&json!({ "shutdown": true }))
+        }
         DaemonCommand::Status => {
             let guard = state.lock().expect("daemon state poisoned");
             to_value(&*guard)
