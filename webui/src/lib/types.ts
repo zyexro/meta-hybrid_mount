@@ -49,11 +49,6 @@ export interface SystemInfo {
   tmpfs_xattr_supported?: boolean;
 }
 
-export interface KasumiFeatureSet {
-  bitmask: number;
-  names: string[];
-}
-
 export interface KasumiLkmStatus {
   loaded: boolean;
   module_name?: string;

@@ -11,7 +11,6 @@ import type {
 
 export interface AppAPI {
   wakeDaemon: () => Promise<void>;
-  shutdownDaemon: () => Promise<void>;
   loadConfig: () => Promise<AppConfig>;
   saveConfig: (config: AppConfig) => Promise<void>;
   resetConfig: () => Promise<void>;

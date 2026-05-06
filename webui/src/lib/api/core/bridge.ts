@@ -12,6 +12,13 @@ interface KsuModule {
   exec: (cmd: string, options?: unknown) => Promise<KsuExecResult>;
 }
 
+interface WebuiSession {
+  base_url: string;
+  token: string;
+}
+
+type DaemonCommandPayload = Record<string, unknown>;
+
 let ksuExec: KsuModule["exec"] | null = null;
 
 function hasKsuBridge(): boolean {
@@ -29,22 +36,22 @@ if (hasKsuBridge()) {
 export const shouldUseMock = import.meta.env.MODE === "test";
 export const defaultVersion = APP_VERSION;
 export const hasExecBridge = Boolean(ksuExec);
-const NO_DAEMON_AUTOWAKE = "HYBRID_MOUNT_NO_DAEMON_AUTOWAKE=1";
 const DAEMON_WAKE_TIMEOUT_MS = 5000;
 
 let daemonReady: Promise<void> | null = null;
+let webuiSession: WebuiSession | null = null;
 
 function requireExec(): KsuModule["exec"] {
   if (!ksuExec) throw new AppError("No KSU environment");
   return ksuExec;
 }
 
-export async function runCommand(command: string): Promise<KsuExecResult> {
+async function runCommand(command: string): Promise<KsuExecResult> {
   const exec = requireExec();
   return exec(command);
 }
 
-export async function runCommandExpectOk(command: string): Promise<string> {
+async function runCommandExpectOk(command: string): Promise<string> {
   const { errno, stdout, stderr } = await runCommand(command);
   if (errno === 0) return stdout;
   throw new AppError(stderr || `command failed: ${command}`, errno);
@@ -52,10 +59,6 @@ export async function runCommandExpectOk(command: string): Promise<string> {
 
 function hybridMountCommand(binaryPath: string, args: string): string {
   return `"${shellEscapeDoubleQuoted(binaryPath)}" ${args}`;
-}
-
-function hybridMountDaemonCommand(binaryPath: string, args: string): string {
-  return `${NO_DAEMON_AUTOWAKE} ${hybridMountCommand(binaryPath, args)}`;
 }
 
 function withTimeout<T>(
@@ -84,27 +87,27 @@ export async function ensureDaemonAwake(binaryPath: string): Promise<void> {
 
   daemonReady = (async () => {
     const raw = await withTimeout(
-      runCommandExpectOk(hybridMountCommand(binaryPath, "daemon ping")),
+      runCommandExpectOk(hybridMountCommand(binaryPath, "daemon webui-start")),
       DAEMON_WAKE_TIMEOUT_MS,
       "hybrid-mount daemon wake timed out",
     );
-    parseHybridMountJsonOutput(raw);
+    const payload = parseHybridMountJsonOutput(raw);
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      typeof (payload as WebuiSession).base_url !== "string" ||
+      typeof (payload as WebuiSession).token !== "string"
+    ) {
+      throw new AppError("hybrid-mount daemon returned invalid WebUI session");
+    }
+    webuiSession = payload as WebuiSession;
   })().catch((error) => {
     daemonReady = null;
+    webuiSession = null;
     throw error;
   });
 
   return daemonReady;
-}
-
-export async function shutdownDaemon(binaryPath: string): Promise<void> {
-  if (shouldUseMock || !hasExecBridge) return;
-  daemonReady = null;
-  try {
-    await runCommandExpectOk(hybridMountDaemonCommand(binaryPath, "daemon stop"));
-  } catch (error) {
-    console.debug("hybrid-mount daemon stop skipped", error);
-  }
 }
 
 function getStructuredError(payload: unknown): string | null {
@@ -140,30 +143,254 @@ export function parseHybridMountJsonOutput(raw: string): unknown {
   return payload;
 }
 
+async function runDaemonHttp(
+  session: WebuiSession,
+  command: DaemonCommandPayload,
+): Promise<unknown> {
+  const response = await fetch(`${session.base_url}/rpc`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${session.token}`,
+    },
+    body: JSON.stringify({ command }),
+  });
+  const text = await response.text();
+  const payload = parseHybridMountJsonOutput(text);
+  if (!response.ok) {
+    throw new AppError(
+      payload && typeof payload === "object" && "error" in payload
+        ? String((payload as { error?: unknown }).error)
+        : `daemon HTTP request failed: ${response.status}`,
+    );
+  }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "ok" in payload &&
+    (payload as { ok?: unknown }).ok === true
+  ) {
+    return (payload as { data?: unknown }).data;
+  }
+  return payload;
+}
+
+function shellSplit(input: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+  let escaped = false;
+
+  for (const char of input) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+    if (char === "\\" && quote !== "'") {
+      escaped = true;
+      continue;
+    }
+    if ((char === "'" || char === '"') && !quote) {
+      quote = char;
+      continue;
+    }
+    if (char === quote) {
+      quote = null;
+      continue;
+    }
+    if (/\s/.test(char) && !quote) {
+      if (current) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+
+  if (escaped) current += "\\";
+  if (current) tokens.push(current);
+  return tokens;
+}
+
+function jsonArg(value: string | undefined, context: string): unknown {
+  if (value === undefined) {
+    throw new AppError(`${context} payload is missing`);
+  }
+  try {
+    return JSON.parse(value) as unknown;
+  } catch (error) {
+    throw new AppError(
+      error instanceof Error
+        ? `Failed to parse ${context} JSON: ${error.message}`
+        : `Failed to parse ${context} JSON`,
+    );
+  }
+}
+
+function daemonCommandFromArgs(args: string): DaemonCommandPayload {
+  const tokens = shellSplit(args);
+  const [group, command] = tokens;
+
+  if (group === "daemon") {
+    if (command === "ping") return { type: "ping" };
+    if (command === "status") return { type: "status" };
+    if (command === "stop") return { type: "shutdown" };
+  }
+
+  if (group === "api") {
+    switch (command) {
+      case "storage":
+        return { type: "api-storage" };
+      case "mount-stats":
+        return { type: "api-mount-stats" };
+      case "mount-topology":
+        return { type: "api-mount-topology" };
+      case "partitions":
+        return { type: "api-partitions" };
+      case "system-info":
+        return { type: "api-system-info" };
+      case "version":
+        return { type: "api-version" };
+      case "config-get":
+        return { type: "api-config-get" };
+      case "config-set":
+        return { type: "api-config-set", config: jsonArg(tokens[2], "config") };
+      case "config-patch": {
+        const applyRuntime = tokens[2] === "--apply-runtime";
+        const payloadIndex = applyRuntime ? 3 : 2;
+        return {
+          type: "api-config-patch",
+          patch: jsonArg(tokens[payloadIndex], "config patch"),
+          apply_runtime: applyRuntime,
+        };
+      }
+      case "config-reset":
+        return { type: "api-config-reset" };
+      case "modules-list": {
+        const pathFlag = tokens.indexOf("--path");
+        return {
+          type: "api-modules-list",
+          path: pathFlag >= 0 ? tokens[pathFlag + 1] : null,
+        };
+      }
+      case "modules-apply":
+        return {
+          type: "api-modules-apply",
+          modules: jsonArg(tokens[2], "modules"),
+        };
+      case "lkm":
+        return { type: "api-lkm" };
+      case "hooks":
+        return { type: "api-hooks" };
+      case "kernel-uname":
+        return { type: "api-kernel-uname" };
+      case "open-url":
+        return { type: "api-open-url", url: tokens[2] ?? "" };
+      case "reboot":
+        return { type: "api-reboot" };
+      case "kasumi-maps-add":
+        return {
+          type: "api-kasumi-maps-add",
+          rule: jsonArg(tokens[2], "Kasumi maps rule"),
+        };
+      case "kasumi-maps-clear":
+        return { type: "api-kasumi-maps-clear" };
+    }
+  }
+
+  if (group === "kasumi") {
+    switch (command) {
+      case "status":
+        return { type: "kasumi-status" };
+      case "list":
+        return { type: "kasumi-list" };
+      case "version":
+        return { type: "kasumi-version" };
+      case "features":
+        return { type: "kasumi-features" };
+      case "hooks":
+        return { type: "kasumi-hooks" };
+      case "apply-config-runtime":
+        return { type: "kasumi-apply-config-runtime" };
+      case "clear":
+        return { type: "kasumi-clear" };
+      case "release-connection":
+        return { type: "kasumi-release-connection" };
+      case "invalidate-cache":
+        return { type: "kasumi-invalidate-cache" };
+      case "fix-mounts":
+        return { type: "kasumi-fix-mounts" };
+      case "restore-uname-global":
+        return { type: "kasumi-restore-uname-global" };
+      case "set-uname": {
+        const modeFlag = tokens.indexOf("--mode");
+        const mode = modeFlag >= 0 ? tokens[modeFlag + 1] : "scoped";
+        const firstValue = modeFlag >= 0 ? modeFlag + 2 : 2;
+        return {
+          type: "kasumi-set-uname",
+          mode,
+          release: tokens[firstValue] ?? "",
+          version: tokens[firstValue + 1] ?? "",
+        };
+      }
+      case "clear-uname": {
+        const modeFlag = tokens.indexOf("--mode");
+        return {
+          type: "kasumi-clear-uname",
+          mode: modeFlag >= 0 ? (tokens[modeFlag + 1] ?? "scoped") : "scoped",
+        };
+      }
+    }
+  }
+
+  if (group === "hide") {
+    if (command === "list") return { type: "hide-list" };
+    if (command === "add") return { type: "hide-add", path: tokens[2] ?? "" };
+    if (command === "remove")
+      return { type: "hide-remove", path: tokens[2] ?? "" };
+    if (command === "apply") return { type: "hide-apply" };
+  }
+
+  if (group === "lkm") {
+    if (command === "load") return { type: "lkm-load" };
+    if (command === "unload") return { type: "lkm-unload" };
+    if (command === "status") return { type: "lkm-status" };
+  }
+
+  throw new AppError(`Unsupported daemon bridge command: ${args}`);
+}
+
 export async function runHybridMountJson(
   args: string,
   binaryPath: string,
 ): Promise<unknown> {
+  const command = daemonCommandFromArgs(args);
   await ensureDaemonAwake(binaryPath);
-  try {
-    const raw = await runCommandExpectOk(
-      hybridMountDaemonCommand(binaryPath, args),
-    );
-    return parseHybridMountJsonOutput(raw);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (
-      message.includes("Failed to connect to daemon socket") ||
-      message.includes("No such file or directory") ||
-      message.includes("Connection refused")
-    ) {
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const session = webuiSession;
+    if (!session) break;
+
+    try {
+      return await runDaemonHttp(session, command);
+    } catch (error) {
+      lastError = error;
+      console.debug("daemon HTTP bridge request failed", error);
       daemonReady = null;
-      await ensureDaemonAwake(binaryPath);
-      const raw = await runCommandExpectOk(
-        hybridMountDaemonCommand(binaryPath, args),
-      );
-      return parseHybridMountJsonOutput(raw);
+      webuiSession = null;
+
+      if (attempt === 0) {
+        await ensureDaemonAwake(binaryPath);
+        continue;
+      }
     }
-    throw error;
   }
+
+  if (lastError) {
+    throw lastError;
+  }
+  throw new AppError("hybrid-mount daemon WebUI session is unavailable");
 }

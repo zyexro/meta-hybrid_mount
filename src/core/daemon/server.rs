@@ -15,6 +15,7 @@
 use std::{
     fs,
     io::{BufRead, BufReader, Error as IoError, ErrorKind, Write},
+    net::{SocketAddr, TcpListener, TcpStream},
     os::unix::{
         fs::{FileTypeExt, MetadataExt, PermissionsExt},
         net::{UnixListener, UnixStream},
@@ -56,6 +57,8 @@ pub fn serve(_config: Config) -> Result<()> {
     listener
         .set_nonblocking(true)
         .with_context(|| format!("Failed to set {} nonblocking", defs::SOCKET_FILE))?;
+    let webui = WebuiHttpState::bind()?;
+    let webui_session = webui.session();
 
     write_pid_file()?;
     let state = Arc::new(Mutex::new(RuntimeState::load().unwrap_or_default()));
@@ -67,24 +70,54 @@ pub fn serve(_config: Config) -> Result<()> {
     let _guard = DaemonRuntimeGuard::new(state.clone());
     let shutdown = install_shutdown_flag()?;
 
-    crate::scoped_log!(info, "daemon", "listening: socket={}", defs::SOCKET_FILE);
+    crate::scoped_log!(
+        info,
+        "daemon",
+        "listening: socket={}, webui={}",
+        defs::SOCKET_FILE,
+        webui.base_url()
+    );
 
     while !shutdown.load(Ordering::Relaxed) {
         match listener.accept() {
             Ok((mut stream, _addr)) => {
-                if let Err(err) = handle_stream(&state, &shutdown, &mut stream) {
+                if let Err(err) = handle_stream(&state, &shutdown, &webui_session, &mut stream) {
                     crate::scoped_log!(warn, "daemon", "request failed: error={:#}", err);
                     let payload = DaemonResponse::error(format!("{err:#}"));
                     let _ = write_response(&mut stream, &payload);
                 }
             }
-            Err(err) if err.kind() == ErrorKind::WouldBlock => {
-                std::thread::sleep(Duration::from_millis(100));
-            }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {}
             Err(err) => {
                 crate::scoped_log!(warn, "daemon", "accept failed: error={:#}", err);
             }
         }
+        match webui.listener.accept() {
+            Ok((stream, _addr)) => {
+                let state = state.clone();
+                let shutdown = shutdown.clone();
+                let session = webui_session.clone();
+                let _ = std::thread::Builder::new()
+                    .name("hybrid-mount-webui-rpc".to_string())
+                    .spawn(move || {
+                        if let Err(err) =
+                            handle_http_connection(&state, &shutdown, &session, stream)
+                        {
+                            crate::scoped_log!(
+                                warn,
+                                "daemon:http",
+                                "request failed: error={:#}",
+                                err
+                            );
+                        }
+                    });
+            }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => {}
+            Err(err) => {
+                crate::scoped_log!(warn, "daemon:http", "accept failed: error={:#}", err);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(10));
     }
 
     crate::scoped_log!(
@@ -99,6 +132,7 @@ pub fn serve(_config: Config) -> Result<()> {
 fn handle_stream(
     state: &Arc<Mutex<RuntimeState>>,
     shutdown: &Arc<AtomicBool>,
+    webui: &WebuiHttpSession,
     stream: &mut UnixStream,
 ) -> Result<()> {
     let mut reader = BufReader::new(
@@ -125,6 +159,7 @@ fn handle_stream(
         &config_path,
         state,
         shutdown,
+        webui,
         request.command,
     )?;
     write_response(stream, &DaemonResponse::success(payload))
@@ -133,6 +168,256 @@ fn handle_stream(
 fn load_runtime_config(config_path: &Path) -> Result<Config> {
     Config::load_optional_from_file(config_path)
         .with_context(|| format!("Failed to load config from path: {}", config_path.display()))
+}
+
+struct WebuiHttpState {
+    listener: TcpListener,
+    session: WebuiHttpSession,
+}
+
+#[derive(Clone)]
+struct WebuiHttpSession {
+    addr: SocketAddr,
+    token: String,
+}
+
+impl WebuiHttpState {
+    fn bind() -> Result<Self> {
+        let listener = TcpListener::bind(("127.0.0.1", 0))
+            .context("Failed to bind WebUI daemon HTTP listener")?;
+        listener
+            .set_nonblocking(true)
+            .context("Failed to set WebUI daemon HTTP listener nonblocking")?;
+        let addr = listener
+            .local_addr()
+            .context("Failed to read WebUI daemon HTTP listener address")?;
+        Ok(Self {
+            listener,
+            session: WebuiHttpSession {
+                addr,
+                token: format!("{:016x}{:016x}", fastrand::u64(..), fastrand::u64(..)),
+            },
+        })
+    }
+
+    fn session(&self) -> WebuiHttpSession {
+        self.session.clone()
+    }
+
+    fn base_url(&self) -> String {
+        self.session.base_url()
+    }
+}
+
+impl WebuiHttpSession {
+    fn base_url(&self) -> String {
+        format!("http://{}", self.addr)
+    }
+
+    fn session_payload(&self) -> Value {
+        json!({
+            "base_url": self.base_url(),
+            "token": self.token.clone(),
+        })
+    }
+}
+
+struct WebuiHttpRequest {
+    request_line: String,
+    authorized: bool,
+    close_after_response: bool,
+    body: Vec<u8>,
+}
+
+fn handle_http_connection(
+    state: &Arc<Mutex<RuntimeState>>,
+    shutdown: &Arc<AtomicBool>,
+    webui: &WebuiHttpSession,
+    mut stream: TcpStream,
+) -> Result<()> {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(30)))
+        .context("Failed to set WebUI HTTP read timeout")?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(10)))
+        .context("Failed to set WebUI HTTP write timeout")?;
+    let mut reader = BufReader::new(
+        stream
+            .try_clone()
+            .context("Failed to clone WebUI HTTP stream")?,
+    );
+
+    while !shutdown.load(Ordering::Relaxed) {
+        let Some(request) = read_http_request(&mut reader, webui)? else {
+            break;
+        };
+        if handle_http_request(state, shutdown, webui, &mut stream, request)? {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+fn read_http_request(
+    reader: &mut BufReader<TcpStream>,
+    webui: &WebuiHttpSession,
+) -> Result<Option<WebuiHttpRequest>> {
+    let mut request_line = String::new();
+    let bytes = match reader.read_line(&mut request_line) {
+        Ok(bytes) => bytes,
+        Err(err) if matches!(err.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {
+            return Ok(None);
+        }
+        Err(err) => return Err(err).context("Failed to read WebUI HTTP request line"),
+    };
+    if bytes == 0 {
+        return Ok(None);
+    }
+
+    let mut content_length = 0usize;
+    let mut authorized = false;
+    let mut close_after_response = request_line.contains("HTTP/1.0");
+    loop {
+        let mut line = String::new();
+        reader
+            .read_line(&mut line)
+            .context("Failed to read WebUI HTTP header")?;
+        let trimmed = line.trim_end_matches(['\r', '\n']);
+        if trimmed.is_empty() {
+            break;
+        }
+        if let Some((name, value)) = trimmed.split_once(':') {
+            let name = name.trim().to_ascii_lowercase();
+            let value = value.trim();
+            if name == "content-length" {
+                content_length = value.parse().unwrap_or(0);
+            } else if name == "authorization" {
+                authorized = value == format!("Bearer {}", webui.token);
+            } else if name == "connection" {
+                for directive in value
+                    .split(',')
+                    .map(|item| item.trim().to_ascii_lowercase())
+                {
+                    if directive == "close" {
+                        close_after_response = true;
+                    } else if directive == "keep-alive" {
+                        close_after_response = false;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut body = vec![0; content_length];
+    std::io::Read::read_exact(reader, &mut body)
+        .context("Failed to read WebUI HTTP request body")?;
+
+    Ok(Some(WebuiHttpRequest {
+        request_line,
+        authorized,
+        close_after_response,
+        body,
+    }))
+}
+
+fn handle_http_request(
+    state: &Arc<Mutex<RuntimeState>>,
+    shutdown: &Arc<AtomicBool>,
+    webui: &WebuiHttpSession,
+    stream: &mut TcpStream,
+    request: WebuiHttpRequest,
+) -> Result<bool> {
+    let mut keep_alive = !request.close_after_response && !shutdown.load(Ordering::Relaxed);
+
+    if request.request_line.starts_with("OPTIONS ") {
+        write_http_response(stream, 204, "No Content", b"", keep_alive)?;
+        return Ok(!keep_alive);
+    }
+    if !request.request_line.starts_with("POST /rpc ") {
+        write_http_json(
+            stream,
+            404,
+            "Not Found",
+            &DaemonResponse::error("unknown WebUI daemon endpoint"),
+            keep_alive,
+        )?;
+        return Ok(!keep_alive);
+    }
+    if !request.authorized {
+        write_http_json(
+            stream,
+            401,
+            "Unauthorized",
+            &DaemonResponse::error("invalid WebUI daemon token"),
+            keep_alive,
+        )?;
+        return Ok(!keep_alive);
+    }
+
+    let close_after_response = request.close_after_response;
+    let request: DaemonRequest =
+        serde_json::from_slice(&request.body).context("Failed to parse WebUI daemon request")?;
+    let config_path = request
+        .config_path
+        .unwrap_or_else(|| PathBuf::from(defs::CONFIG_FILE));
+    let effective_config = load_runtime_config(&config_path)?;
+    let response = match dispatch_command(
+        &effective_config,
+        &config_path,
+        state,
+        shutdown,
+        webui,
+        request.command,
+    ) {
+        Ok(payload) => DaemonResponse::success(payload),
+        Err(err) => DaemonResponse::error(format!("{err:#}")),
+    };
+    keep_alive = !close_after_response && !shutdown.load(Ordering::Relaxed);
+    write_http_json(stream, 200, "OK", &response, keep_alive)?;
+    Ok(!keep_alive)
+}
+
+fn write_http_json(
+    stream: &mut TcpStream,
+    status: u16,
+    reason: &str,
+    response: &DaemonResponse,
+    keep_alive: bool,
+) -> Result<()> {
+    let body = serde_json::to_vec(response).context("Failed to serialize WebUI HTTP response")?;
+    write_http_response(stream, status, reason, &body, keep_alive)
+}
+
+fn write_http_response(
+    stream: &mut TcpStream,
+    status: u16,
+    reason: &str,
+    body: &[u8],
+    keep_alive: bool,
+) -> Result<()> {
+    let connection = if keep_alive { "keep-alive" } else { "close" };
+    write!(
+        stream,
+        "HTTP/1.1 {status} {reason}\r\n\
+         Content-Type: application/json\r\n\
+         Content-Length: {}\r\n\
+         Access-Control-Allow-Origin: *\r\n\
+         Access-Control-Allow-Methods: POST, OPTIONS\r\n\
+         Access-Control-Allow-Headers: authorization, content-type\r\n\
+         Access-Control-Allow-Private-Network: true\r\n\
+         Access-Control-Max-Age: 600\r\n\
+         Connection: {connection}\r\n\
+         Keep-Alive: timeout=30\r\n\r\n",
+        body.len(),
+    )
+    .context("Failed to write WebUI HTTP response header")?;
+    stream
+        .write_all(body)
+        .context("Failed to write WebUI HTTP response body")?;
+    stream
+        .flush()
+        .context("Failed to flush WebUI HTTP response")
 }
 
 fn patch_config_file(config_path: &Path, patch: Value) -> Result<Config> {
@@ -219,10 +504,12 @@ fn dispatch_command(
     config_path: &Path,
     state: &Arc<Mutex<RuntimeState>>,
     shutdown: &Arc<AtomicBool>,
+    webui: &WebuiHttpSession,
     command: DaemonCommand,
 ) -> Result<Value> {
     match command {
         DaemonCommand::Ping => to_value(&json!({ "status": "ok" })),
+        DaemonCommand::WebuiStart => Ok(webui.session_payload()),
         DaemonCommand::Shutdown => {
             shutdown.store(true, Ordering::Relaxed);
             to_value(&json!({ "shutdown": true }))

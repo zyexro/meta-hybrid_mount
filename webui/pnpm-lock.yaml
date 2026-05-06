@@ -10,18 +10,12 @@ importers:
       "@eslint/js":
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.3.0)
-      "@material/material-color-utilities":
-        specifier: ^0.4.0
-        version: 0.4.0
       "@material/web":
         specifier: ^2.4.1
         version: 2.4.1
       kernelsu:
         specifier: ^3.0.2
         version: 3.0.2
-      smol-toml:
-        specifier: ^1.6.1
-        version: 1.6.1
       solid-js:
         specifier: ^1.9.12
         version: 1.9.12
@@ -41,9 +35,6 @@ importers:
       prettier:
         specifier: ^3.8.3
         version: 3.8.3
-      tslib:
-        specifier: ^2.8.1
-        version: 2.8.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -593,12 +584,6 @@ packages:
     resolution:
       {
         integrity: sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A==,
-      }
-
-  "@material/material-color-utilities@0.4.0":
-    resolution:
-      {
-        integrity: sha512-dlq6VExJReb8dhjj3a/yTigr3ncNwoFmL5Iy2ENtbDX03EmNeOEdZ+vsaGrj7RTuO+mB7L58II4LCsl4NpM8uw==,
       }
 
   "@material/web@2.4.1":
@@ -1815,13 +1800,6 @@ packages:
         integrity: sha512-ybx0WO1/8bSBLEWXZvEd7gMW3Sn3JFlW3TvX1nREbDLRNQNaeNN8WK0meBwPdAaOI7TtRRRJn/Es1zhrrCHu7g==,
       }
 
-  smol-toml@1.6.1:
-    resolution:
-      {
-        integrity: sha512-dWUG8F5sIIARXih1DTaQAX4SsiTXhInKf1buxdY9DIg4ZYPZK5nGM1VRIYmEbDbsHt7USo99xSLFu5Q1IqTmsg==,
-      }
-    engines: { node: ">= 18" }
-
   solid-js@1.9.12:
     resolution:
       {
@@ -2376,8 +2354,6 @@ snapshots:
   "@lit/reactive-element@2.1.2":
     dependencies:
       "@lit-labs/ssr-dom-shim": 1.5.1
-
-  "@material/material-color-utilities@0.4.0": {}
 
   "@material/web@2.4.1":
     dependencies:
@@ -3076,8 +3052,6 @@ snapshots:
   shebang-regex@3.0.0: {}
 
   siginfo@2.0.0: {}
-
-  smol-toml@1.6.1: {}
 
   solid-js@1.9.12:
     dependencies:

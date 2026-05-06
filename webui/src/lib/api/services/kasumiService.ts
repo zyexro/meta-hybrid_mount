@@ -1,21 +1,15 @@
 import { runHybridMountJson } from "../core/bridge";
 import { shellEscapeDoubleQuoted } from "../core/shell";
-import { PATHS } from "../../constants";
+import { DEFAULT_CONFIG, PATHS } from "../../constants";
 import type {
   KernelUnameValues,
   KasumiStatus,
   KasumiUnameConfig,
 } from "../../types";
-import { loadConfigFromFile, patchConfigFile } from "../repos/configRepo";
-import { loadRuntimeState } from "../repos/runtimeRepo";
-import {
-  buildKasumiStatusFromPayload,
-  buildKasumiStatusFromRuntimeState,
-} from "../codec/runtimeCodec";
+import { patchConfigFile } from "../repos/configRepo";
+import { buildKasumiStatusFromPayload } from "../codec/runtimeCodec";
 import { AppError } from "../core/error";
 import { isRecord, isString } from "../core/guards";
-
-const KASUMI_MODULE_NAME = "kasumi_lkm";
 
 async function applyKasumiRuntimeConfig(): Promise<void> {
   await runHybridMountJson("kasumi apply-config-runtime", PATHS.BINARY);
@@ -32,15 +26,14 @@ async function updateKasumiConfig(
 }
 
 export async function getKasumiStatus(): Promise<KasumiStatus> {
-  const [config, state] = await Promise.all([
-    loadConfigFromFile(),
-    loadRuntimeState(),
-  ]);
   const payload = await runHybridMountJson("kasumi status", PATHS.BINARY);
-  return (
-    buildKasumiStatusFromPayload(payload, config.kasumi, state) ??
-    buildKasumiStatusFromRuntimeState(config.kasumi, state, KASUMI_MODULE_NAME)
+  const status = buildKasumiStatusFromPayload(
+    payload,
+    DEFAULT_CONFIG.kasumi,
+    {},
   );
+  if (status) return status;
+  throw new AppError("kasumi status returned invalid payload");
 }
 
 export async function setKasumiEnabled(enabled: boolean): Promise<void> {

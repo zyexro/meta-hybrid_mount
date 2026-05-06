@@ -12,17 +12,17 @@ import { loadRuntimeState } from "../repos/runtimeRepo";
 
 export async function getStorageUsage(): Promise<StorageStatus> {
   try {
-    const payload = await runHybridMountJson("api storage", PATHS.BINARY);
-    if (!isRecord(payload)) {
-      throw new Error("storage payload is invalid");
-    }
     const state = await loadRuntimeState();
     const modeStats = buildModeStats(state);
     return {
-      type: isString(payload.mode)
-        ? (payload.mode as StorageStatus["type"])
-        : "unknown",
-      error: isString(payload.error) ? payload.error : undefined,
+      type:
+        isString(state.storage_mode) && state.storage_mode.trim()
+          ? (state.storage_mode as StorageStatus["type"])
+          : "unknown",
+      error:
+        isString(state.mount_point) && state.mount_point.trim()
+          ? undefined
+          : "Not mounted",
       supported_modes: ["tmpfs", "ext4"],
       modeStats,
       mountedCount: buildMountedCount(state, modeStats),

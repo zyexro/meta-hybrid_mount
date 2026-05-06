@@ -13,7 +13,6 @@ import { uiStore } from "./lib/stores/uiStore";
 import { configStore } from "./lib/stores/configStore";
 import { sysStore } from "./lib/stores/sysStore";
 import { kasumiStore } from "./lib/stores/kasumiStore";
-import { moduleStore } from "./lib/stores/moduleStore";
 import { API } from "./lib/api";
 import TopBar from "./components/TopBar";
 import NavBar from "./components/NavBar";
@@ -161,13 +160,7 @@ export default function App() {
     if (preloadTimer !== undefined) {
       window.clearTimeout(preloadTimer);
     }
-    window.removeEventListener("pagehide", handlePageHide);
-    void API.shutdownDaemon();
   });
-
-  function handlePageHide() {
-    void API.shutdownDaemon();
-  }
 
   function startRoutePreload() {
     const pendingRoutes = visibleRoutes().filter(
@@ -192,7 +185,6 @@ export default function App() {
   }
 
   onMount(() => {
-    window.addEventListener("pagehide", handlePageHide);
     void initializeApp();
   });
 
@@ -205,10 +197,6 @@ export default function App() {
       void configStore.loadConfig();
       void sysStore.ensureVersionLoaded();
       setInitialDataReady(true);
-
-      void statusLoad.finally(() => {
-        void moduleStore.ensureModulesLoaded();
-      });
 
       void Promise.allSettled([statusLoad, kasumiLoad]).then(() => {
         if (disposed) return;

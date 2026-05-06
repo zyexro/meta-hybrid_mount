@@ -3,7 +3,6 @@ import { PATHS } from "./constants";
 import {
   ensureDaemonAwake,
   hasExecBridge,
-  shutdownDaemon,
   shouldUseMock,
 } from "./api/core/bridge";
 import { shellEscapeDoubleQuoted } from "./api/core/shell";
@@ -31,7 +30,6 @@ import type { AppAPI } from "./api/contracts";
 
 const RealAPI: AppAPI = {
   wakeDaemon: () => ensureDaemonAwake(PATHS.BINARY),
-  shutdownDaemon: () => shutdownDaemon(PATHS.BINARY),
   loadConfig: loadConfigFromFile,
   saveConfig: saveConfigToFile,
   resetConfig: async () => {

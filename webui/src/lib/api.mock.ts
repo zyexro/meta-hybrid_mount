@@ -182,9 +182,6 @@ export const MockAPI: AppAPI = {
   async wakeDaemon(): Promise<void> {
     await delay(20);
   },
-  async shutdownDaemon(): Promise<void> {
-    await delay(20);
-  },
   async loadConfig(): Promise<AppConfig> {
     await delay(300);
     return { ...DEFAULT_CONFIG };

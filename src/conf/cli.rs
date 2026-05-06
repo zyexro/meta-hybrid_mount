@@ -162,6 +162,8 @@ pub enum DaemonCommands {
     Launch,
     Serve,
     Ping,
+    #[command(name = "webui-start")]
+    WebuiStart,
     Stop,
     Status,
 }

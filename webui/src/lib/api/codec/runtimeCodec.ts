@@ -1,11 +1,5 @@
+import type { AppConfig, KasumiStatus, StorageStatus } from "../../types";
 import type {
-  AppConfig,
-  KasumiStatus,
-  Module,
-  StorageStatus,
-} from "../../types";
-import type {
-  RuntimeKasumiPayload,
   RuntimeModeStatsPayload,
   RuntimeStatePayload,
 } from "../repos/runtimeRepo";
@@ -18,43 +12,6 @@ import {
   toNonNegativeInt,
 } from "../core/guards";
 import { normalizeKasumiConfig } from "./configCodec";
-
-export function runtimeModuleMode(
-  moduleId: string,
-  state: RuntimeStatePayload,
-): Module["mode"] | null {
-  const overlay = isStringArray(state.overlay_modules)
-    ? state.overlay_modules
-    : [];
-  if (overlay.includes(moduleId)) return "overlay";
-  const magic = isStringArray(state.magic_modules) ? state.magic_modules : [];
-  if (magic.includes(moduleId)) return "magic";
-  const kasumi = isStringArray(state.kasumi_modules)
-    ? state.kasumi_modules
-    : [];
-  if (kasumi.includes(moduleId)) return "kasumi";
-  return null;
-}
-
-export function parseModuleProp(moduleId: string, raw: string | null) {
-  const values: Record<string, string> = {};
-  if (raw) {
-    for (const line of raw.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const index = trimmed.indexOf("=");
-      if (index <= 0) continue;
-      values[trimmed.slice(0, index)] = trimmed.slice(index + 1);
-    }
-  }
-
-  return {
-    name: values.name?.trim() || moduleId,
-    version: values.version?.trim() || "unknown",
-    author: values.author?.trim() || "unknown",
-    description: values.description?.trim() || "No description",
-  };
-}
 
 export function buildModeStats(
   state: RuntimeStatePayload,
@@ -162,66 +119,6 @@ export function buildKasumiStatusFromPayload(
         : isStringArray(fallbackState.kasumi_modules)
           ? fallbackState.kasumi_modules
           : [],
-    },
-  };
-}
-
-export function buildKasumiStatusFromRuntimeState(
-  config: AppConfig["kasumi"],
-  state: RuntimeStatePayload,
-  kasumiModuleName: string,
-): KasumiStatus {
-  const runtime = isRecord(state.kasumi)
-    ? (state.kasumi as RuntimeKasumiPayload)
-    : {};
-
-  return {
-    status: isString(runtime.status)
-      ? runtime.status
-      : config.enabled
-        ? "unavailable"
-        : "disabled",
-    available: isBoolean(runtime.available) ? runtime.available : false,
-    protocol_version:
-      runtime.protocol_version === null || isNumber(runtime.protocol_version)
-        ? ((runtime.protocol_version as number | null | undefined) ?? null)
-        : null,
-    feature_bits:
-      runtime.feature_bits === null || isNumber(runtime.feature_bits)
-        ? ((runtime.feature_bits as number | null | undefined) ?? null)
-        : null,
-    feature_names: isStringArray(runtime.feature_names)
-      ? runtime.feature_names
-      : [],
-    hooks: isStringArray(runtime.hooks) ? runtime.hooks : [],
-    rule_count: toNonNegativeInt(runtime.rule_count),
-    user_hide_rule_count: toNonNegativeInt(runtime.user_hide_rule_count),
-    mirror_path: isString(runtime.mirror_path)
-      ? runtime.mirror_path
-      : config.mirror_path,
-    lkm: {
-      loaded: isBoolean(runtime.lkm_loaded) ? runtime.lkm_loaded : false,
-      module_name:
-        isBoolean(runtime.lkm_loaded) && runtime.lkm_loaded
-          ? kasumiModuleName
-          : undefined,
-      autoload: config.lkm_autoload,
-      kmi_override: config.lkm_kmi_override,
-      current_kmi: isString(runtime.lkm_current_kmi)
-        ? runtime.lkm_current_kmi
-        : "",
-      search_dir: config.lkm_dir,
-      module_file: undefined,
-      last_error: null,
-    },
-    config,
-    runtime: {
-      snapshot: isRecord(state.kasumi)
-        ? (state.kasumi as Record<string, unknown>)
-        : {},
-      kasumi_modules: isStringArray(state.kasumi_modules)
-        ? state.kasumi_modules
-        : [],
     },
   };
 }
