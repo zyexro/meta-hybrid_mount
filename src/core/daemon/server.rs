@@ -47,6 +47,8 @@ use crate::{
 };
 
 pub fn serve(_config: Config) -> Result<()> {
+    crate::utils::check_ksu();
+
     fs::create_dir_all(defs::RUN_DIR)
         .with_context(|| format!("Failed to create daemon run directory {}", defs::RUN_DIR))?;
     cleanup_stale_runtime_files()?;

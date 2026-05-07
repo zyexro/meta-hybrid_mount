@@ -357,12 +357,17 @@ fn unload_module_via_syscall(_module_name: &str) -> Result<()> {
 }
 
 fn load_module_via_ksud(ko_path: &Path, params: &str) -> Result<()> {
-    let candidates = ["/data/adb/ksud", "ksud"];
+    let candidates = [
+        ("/data/adb/ksud", &["debug", "insmod"][..]),
+        ("ksud", &["debug", "insmod"][..]),
+        ("/data/adb/ksud", &["insmod"][..]),
+        ("ksud", &["insmod"][..]),
+    ];
     let mut last_failure = None;
 
-    for candidate in candidates {
+    for (candidate, subcommand) in candidates {
         let mut cmd = Command::new(candidate);
-        cmd.arg("insmod").arg(ko_path);
+        cmd.args(subcommand).arg(ko_path);
         if !params.is_empty() {
             cmd.arg(params);
         }
@@ -373,8 +378,9 @@ fn load_module_via_ksud(ko_path: &Path, params: &str) -> Result<()> {
                 let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 let detail = if !stderr.is_empty() { stderr } else { stdout };
                 last_failure = Some(anyhow!(
-                    "{} insmod {} failed with status {}{}",
+                    "{} {} {} failed with status {}{}",
                     candidate,
+                    subcommand.join(" "),
                     ko_path.display(),
                     output.status,
                     if detail.is_empty() {
@@ -392,6 +398,10 @@ fn load_module_via_ksud(ko_path: &Path, params: &str) -> Result<()> {
 
     Err(last_failure
         .unwrap_or_else(|| anyhow!("ksud debug insmod failed for {}", ko_path.display())))
+}
+
+fn should_try_ksud_fallback() -> bool {
+    KSU.load(Ordering::Relaxed) || Path::new("/data/adb/ksud").exists()
 }
 
 fn unload_module_via_rmmod(module_name: &str) -> Result<()> {
@@ -445,7 +455,7 @@ pub fn load(config: &KasumiConfig) -> Result<()> {
 
     let params = String::new();
     if let Err(primary_err) = load_module_via_finit(&ko_path, &params) {
-        if KSU.load(Ordering::Relaxed) {
+        if should_try_ksud_fallback() {
             crate::scoped_log!(
                 warn,
                 "lkm",
