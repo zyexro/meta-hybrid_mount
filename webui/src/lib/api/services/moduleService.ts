@@ -12,7 +12,6 @@ interface ModuleRuntimeEntry {
   enabled: boolean;
   source_path?: string;
   rules: ModuleRules;
-  metadata?: ModuleMetadata;
 }
 
 interface ModuleMetadata {
@@ -33,16 +32,9 @@ function defaultModuleMetadata(moduleId: string): ModuleMetadata {
 
 function normalizeModuleRuntimeEntry(value: unknown): ModuleRuntimeEntry {
   const payload = isRecord(value) ? value : {};
-  const id = isString(payload.id) ? payload.id : "";
   const rulesPayload = isRecord(payload.rules) ? payload.rules : {};
-  const fallbackMetadata = defaultModuleMetadata(id);
-  const hasInlineMetadata =
-    isString(payload.name) ||
-    isString(payload.version) ||
-    isString(payload.author) ||
-    isString(payload.description);
   return {
-    id,
+    id: isString(payload.id) ? payload.id : "",
     mode: normalizeMountMode(payload.mode),
     is_mounted: isBoolean(payload.is_mounted) ? payload.is_mounted : false,
     enabled: isBoolean(payload.enabled) ? payload.enabled : true,
@@ -53,26 +45,6 @@ function normalizeModuleRuntimeEntry(value: unknown): ModuleRuntimeEntry {
       default_mode: normalizeMountMode(rulesPayload.default_mode),
       paths: normalizeStringMap(rulesPayload.paths),
     },
-    metadata: hasInlineMetadata
-      ? {
-          name:
-            isString(payload.name) && payload.name.trim()
-              ? payload.name
-              : fallbackMetadata.name,
-          version:
-            isString(payload.version) && payload.version.trim()
-              ? payload.version
-              : fallbackMetadata.version,
-          author:
-            isString(payload.author) && payload.author.trim()
-              ? payload.author
-              : fallbackMetadata.author,
-          description:
-            isString(payload.description) && payload.description.trim()
-              ? payload.description
-              : fallbackMetadata.description,
-        }
-      : undefined,
   };
 }
 
@@ -103,9 +75,6 @@ function parseModuleMetadata(raw: string, moduleId: string): ModuleMetadata {
 async function loadModuleMetadata(
   entry: ModuleRuntimeEntry,
 ): Promise<ModuleMetadata> {
-  if (entry.metadata) {
-    return entry.metadata;
-  }
   if (!entry.source_path?.trim()) {
     return defaultModuleMetadata(entry.id);
   }

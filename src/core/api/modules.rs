@@ -32,10 +32,6 @@ use crate::{
 #[derive(Debug, Clone, Serialize)]
 pub struct ModuleListEntry {
     pub id: String,
-    pub name: String,
-    pub version: String,
-    pub author: String,
-    pub description: String,
     pub mode: MountMode,
     pub is_mounted: bool,
     pub enabled: bool,
@@ -126,14 +122,9 @@ fn build_scanned_modules_payload(
         let enabled = !inventory::has_mount_block_marker(&module_path);
         let runtime_mode = enabled.then(|| runtime_index.mode(&id)).flatten();
         let mode = runtime_mode.unwrap_or(rules.default_mode);
-        let metadata = read_module_metadata(&module_path, &id);
 
         modules.push(ModuleListEntry {
             id,
-            name: metadata.name,
-            version: metadata.version,
-            author: metadata.author,
-            description: metadata.description,
             mode,
             is_mounted: runtime_mode.is_some(),
             enabled,
@@ -164,14 +155,9 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
             let runtime_mode = runtime_index.mode(&id);
             let mode = runtime_mode.unwrap_or(rules.default_mode);
             let enabled = runtime_index.enabled(&id);
-            let metadata = read_module_metadata(&source_path, &id);
 
             ModuleListEntry {
                 id,
-                name: metadata.name,
-                version: metadata.version,
-                author: metadata.author,
-                description: metadata.description,
                 mode,
                 is_mounted: runtime_mode.is_some(),
                 enabled,
@@ -363,7 +349,7 @@ mod tests {
     };
 
     #[test]
-    fn runtime_modules_payload_keeps_runtime_rules_and_default_metadata() {
+    fn runtime_modules_payload_keeps_runtime_and_rules_without_metadata() {
         let mut config = Config {
             moduledir: PathBuf::from("/modules"),
             default_mode: DefaultMode::Magic,
@@ -385,42 +371,10 @@ mod tests {
 
         let module = &modules[0];
         assert_eq!(module.id, "alpha");
-        assert_eq!(module.name, "alpha");
-        assert_eq!(module.version, "unknown");
-        assert_eq!(module.author, "unknown");
-        assert_eq!(module.description, "No description");
         assert_eq!(module.mode, MountMode::Overlay);
         assert!(module.is_mounted);
         assert!(module.enabled);
         assert_eq!(module.source_path, PathBuf::from("/modules/alpha"));
         assert_eq!(module.rules.default_mode, MountMode::Overlay);
-    }
-
-    #[test]
-    fn scanned_modules_payload_includes_module_prop_metadata() -> Result<()> {
-        let temp = tempfile::tempdir()?;
-        let module_dir = temp.path().join("alpha");
-        std::fs::create_dir(&module_dir)?;
-        std::fs::write(
-            module_dir.join("module.prop"),
-            "name=Alpha Module\nversion=1.2.3\nauthor=Alice\ndescription=Fast path\n",
-        )?;
-
-        let config = Config {
-            moduledir: temp.path().to_path_buf(),
-            ..Default::default()
-        };
-        let state = RuntimeState::default();
-
-        let modules = build_scanned_modules_payload(&config, &state, temp.path())?;
-        assert_eq!(modules.len(), 1);
-
-        let module = &modules[0];
-        assert_eq!(module.id, "alpha");
-        assert_eq!(module.name, "Alpha Module");
-        assert_eq!(module.version, "1.2.3");
-        assert_eq!(module.author, "Alice");
-        assert_eq!(module.description, "Fast path");
-        Ok(())
     }
 }
