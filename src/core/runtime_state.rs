@@ -273,10 +273,10 @@ impl RuntimeState {
 
     pub fn save(&self) -> Result<()> {
         let json = serde_json::to_string_pretty(self)?;
-        if let Ok(existing) = std::fs::read_to_string(defs::STATE_FILE) {
-            if existing == json {
-                return Ok(());
-            }
+        if let Ok(existing) = std::fs::read_to_string(defs::STATE_FILE)
+            && existing == json
+        {
+            return Ok(());
         }
         crate::scoped_log!(
             debug,
