@@ -23,7 +23,7 @@ use std::{
 use anyhow::{Result, bail};
 use rustix::fs::{Gid, Mode, Uid, chmod, chown};
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use rustix::mount::mount_bind;
+pub(super) use rustix::mount::mount_bind;
 
 use crate::{
     core::inventory::{self, Module},
