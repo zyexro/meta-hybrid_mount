@@ -40,18 +40,9 @@ const createSysStore = () => {
         modeStats,
         mountedCount: buildMountedCount(status, modeStats),
       });
-      setSystemInfo({
-        kernel: isString(status.mount_point) ? status.mount_point : "-",
-        selinux: "-",
-        mountBase: isString(status.mount_point) ? status.mount_point : "-",
-        activeMounts: isStringArray(status.active_mounts)
-          ? status.active_mounts
-          : [],
-      });
       setActivePartitions(
         isStringArray(status.active_mounts) ? status.active_mounts : [],
       );
-      hasLoaded = true;
     }
   }
 
@@ -147,14 +138,6 @@ const createSysStore = () => {
       supported_modes: ["tmpfs", "ext4"],
       modeStats,
       mountedCount: buildMountedCount(status, modeStats),
-    });
-    setSystemInfo({
-      kernel: isString(status.mount_point) ? status.mount_point : "-",
-      selinux: "-",
-      mountBase: isString(status.mount_point) ? status.mount_point : "-",
-      activeMounts: isStringArray(status.active_mounts)
-        ? status.active_mounts
-        : [],
     });
     setActivePartitions(
       isStringArray(status.active_mounts) ? status.active_mounts : [],
