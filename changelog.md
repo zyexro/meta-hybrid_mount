@@ -1,4 +1,50 @@
 
+## v4.0.0
+
+
+### <!-- 1 --> Features
+
+- Enhance ksu handling in module loading and add fallback check
+
+- `daemon` Implement command handling and HTTP server for WebUI - Added `commands.rs` to handle various daemon commands including status, configuration, and Kasumi operations. - Introduced `http.rs` to manage the HTTP server for WebUI interactions, including session management and SSE support. - Implemented request validation and response formatting for daemon commands. - Created validation schemas in `validation.ts` for structured error handling and response parsing in the WebUI.
+
+- `App` Ensure status is loaded during app initialization
+
+
+
+### <!-- 2 --> Fixes
+
+- Review and harden frontend-backend interaction - saveConfigToFile now includes kasumi and rules fields (was silently dropping) - Replace fastrand token generation with /dev/urandom CSPRNG - Use {err} instead of {err:#} in HTTP responses to avoid leaking filesystem paths - Remove Access-Control-Allow-Private-Network CORS header - Add /proc/<pid>/cmdline verification to PID file cleanup - Add config.toml.bak backup before overwriting config - Remove duplicate KasumiUnameMode enum, reuse schema::KasumiUnameMode - Replace inverted bool return with ConnectionAction enum in HTTP handler - Add typed DaemonCommandPayload discriminated union matching Rust serde tags - Add runDaemonCommand() bypassing JSON-in-shell-string round-trip - Preserve first error in bridge retry for debugging - Fix clearKasumiUname transaction order (clear runtime before config) - Fix ensureDaemonAwake TOCTOU race - Add proper types to RuntimeStatePayload stable fields - Rename parseHybridMountJsonOutput to parseDaemonJsonOutput - Clarify extractConfig fallback logic with comment
+
+
+
+### <!-- 4 --> Refactors
+
+- Remove module metadata from runtime entries and tests for cleaner payload handling
+
+- `runtime_state` Simplify conditional check in save method
+
+- `sysStore` Remove redundant systemInfo updates in handleSseUpdate
+
+
+
+### <!-- 8 --> Maintenance
+
+- Update .gitignore to include CLAUDE.md
+
+- Pnpm format
+
+- Make clippy happy
+
+
+
+### <!-- 9 --> Other
+
+- Refactor inventory discovery and planner modules for improved directory handling and performance
+
+
+
+
 ## v3.6.1
 
 
