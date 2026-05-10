@@ -20,6 +20,16 @@ use ksu::NukeExt4Sysfs;
 pub fn nuke_path(path: &Path) {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
+        if !crate::utils::KSU.load(std::sync::atomic::Ordering::Relaxed) {
+            crate::scoped_log!(
+                debug,
+                "nuke",
+                "execute skipped: path={}, reason=non_ksu",
+                path.display()
+            );
+            return;
+        }
+
         let mut nuke = NukeExt4Sysfs::new();
         nuke.add(path);
         if let Err(e) = nuke.execute() {
