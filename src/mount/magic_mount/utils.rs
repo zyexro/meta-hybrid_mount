@@ -131,13 +131,6 @@ where
             mount_mirror(&path, &work_dir_path, &entry)?;
         }
     } else if file_type.is_symlink() {
-        crate::scoped_log!(
-            debug,
-            "magic:collect",
-            "mirror symlink: src={}, dst={}",
-            path.display(),
-            work_dir_path.display()
-        );
         clone_symlink(&path, &work_dir_path)?;
     }
 
@@ -479,23 +472,6 @@ where
 {
     let src_symlink = read_link(src.as_ref())?;
     symlink(&src_symlink, dst.as_ref())?;
-    if let Err(err) = lsetfilecon(dst.as_ref(), lgetfilecon(src.as_ref())?.as_str()) {
-        crate::scoped_log!(
-            debug,
-            "magic:collect",
-            "clone symlink context skipped: dst={}, src={}, error={:#}",
-            dst.as_ref().display(),
-            src.as_ref().display(),
-            err
-        );
-    }
-    crate::scoped_log!(
-        debug,
-        "magic:collect",
-        "clone symlink: dst={}, src={}, target={}",
-        dst.as_ref().display(),
-        src.as_ref().display(),
-        src_symlink.display()
-    );
+    let _ = lsetfilecon(dst.as_ref(), lgetfilecon(src.as_ref())?.as_str());
     Ok(())
 }

@@ -124,6 +124,7 @@ pub(super) fn compile_rules(
 
         let module_root = mirror_module_root(config, module)?;
         let mut scanned_partition_roots: HashSet<PathBuf> = HashSet::new();
+        let mut symlink_directory_skips = 0usize;
 
         for partition_name in &managed_partition_list {
             let partition_root = module_root.join(partition_name);
@@ -213,13 +214,7 @@ pub(super) fn compile_rules(
                     && resolved_virtual_path.exists()
                     && resolved_virtual_path.is_dir()
                 {
-                    crate::scoped_log!(
-                        warn,
-                        "mount:kasumi",
-                        "symlink skip: module={}, path={}, reason=directory_target",
-                        module.id,
-                        resolved_virtual_path.display()
-                    );
+                    symlink_directory_skips += 1;
                     continue;
                 }
 
@@ -235,6 +230,16 @@ pub(super) fn compile_rules(
                     file_type,
                 });
             }
+        }
+
+        if symlink_directory_skips > 0 {
+            crate::scoped_log!(
+                warn,
+                "mount:kasumi",
+                "symlink skip summary: module={}, reason=directory_target, count={}",
+                module.id,
+                symlink_directory_skips
+            );
         }
     }
 

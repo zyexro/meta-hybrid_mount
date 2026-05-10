@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fs,
     io::ErrorKind,
     os::unix::fs::MetadataExt,
@@ -73,19 +73,14 @@ pub(super) fn setup_ext4_image(
 fn calculate_total_size(paths: &[PathBuf]) -> Result<u64> {
     let mut total_size = 0;
     let mut visited_node_map = HashSet::new();
+    let mut symlink_stats = SizeScanSymlinkStats::default();
     let mut stack: Vec<PathBuf> = paths.iter().filter(|path| path.exists()).cloned().collect();
 
     while let Some(current) = stack.pop() {
         let metadata = match fs::symlink_metadata(&current) {
             Ok(metadata) => metadata,
             Err(err) if err.raw_os_error() == Some(libc::ELOOP) => {
-                crate::scoped_log!(
-                    warn,
-                    "storage:ext4",
-                    "size skip: path={}, reason=symlink_loop, error={}",
-                    current.display(),
-                    err
-                );
+                symlink_stats.record_loop(&current);
                 continue;
             }
             Err(err) if err.kind() == ErrorKind::NotFound => {
@@ -127,15 +122,53 @@ fn calculate_total_size(paths: &[PathBuf]) -> Result<u64> {
                 }
             }
         } else if file_type.is_symlink() {
+            symlink_stats.record_skip(&current);
+        }
+    }
+    symlink_stats.log();
+    Ok(total_size)
+}
+
+#[derive(Default)]
+struct SizeScanSymlinkStats {
+    skipped: BTreeMap<String, usize>,
+    loops: BTreeMap<String, usize>,
+}
+
+impl SizeScanSymlinkStats {
+    fn record_skip(&mut self, path: &Path) {
+        *self.skipped.entry(module_log_key(path)).or_default() += 1;
+    }
+
+    fn record_loop(&mut self, path: &Path) {
+        *self.loops.entry(module_log_key(path)).or_default() += 1;
+    }
+
+    fn log(&self) {
+        for (module, count) in &self.skipped {
             crate::scoped_log!(
                 debug,
                 "storage:ext4",
-                "size skip: path={}, reason=symlink",
-                current.display()
+                "size skip summary: module={}, reason=symlink, count={}",
+                module,
+                count
+            );
+        }
+
+        for (module, count) in &self.loops {
+            crate::scoped_log!(
+                warn,
+                "storage:ext4",
+                "size skip summary: module={}, reason=symlink_loop, count={}",
+                module,
+                count
             );
         }
     }
-    Ok(total_size)
+}
+
+fn module_log_key(path: &Path) -> String {
+    crate::utils::extract_module_id(path).unwrap_or_else(|| "<unknown>".to_string())
 }
 
 fn format_ext4_image(img_path: &Path) -> Result<()> {

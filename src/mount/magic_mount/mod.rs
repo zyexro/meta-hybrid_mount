@@ -15,7 +15,7 @@
 mod utils;
 
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     error::Error as StdError,
     fmt, fs,
     path::{Path, PathBuf},
@@ -210,12 +210,20 @@ fn wrap_with_module_context(err: anyhow::Error, node: &Node) -> anyhow::Error {
 struct MountContext {
     stats: MountStatistics,
     failed_module_ids: HashSet<String>,
+    symlinks_by_module: BTreeMap<String, usize>,
 }
 
 impl MountContext {
     fn record_failed_node(&mut self, node: &Node) {
         self.stats.record_failed();
         self.failed_module_ids.extend(infer_module_ids(node));
+    }
+
+    fn record_symlink(&mut self, module_path: &Path) {
+        self.stats.record_symlink();
+        let module_id =
+            crate::utils::extract_module_id(module_path).unwrap_or_else(|| "<unknown>".to_string());
+        *self.symlinks_by_module.entry(module_id).or_default() += 1;
     }
 }
 
@@ -272,13 +280,6 @@ impl MagicMount {
 impl MagicMount {
     fn symlink(&self, context: &mut MountContext) -> Result<()> {
         if let Some(module_path) = &self.node.module_path {
-            crate::scoped_log!(
-                debug,
-                "magic",
-                "mount symlink: src={}, dst={}",
-                module_path.display(),
-                self.work_dir_path.display()
-            );
             clone_symlink(module_path, &self.work_dir_path).with_context(|| {
                 format!(
                     "create module symlink {} -> {}",
@@ -286,7 +287,7 @@ impl MagicMount {
                     self.work_dir_path.display(),
                 )
             })?;
-            context.stats.record_symlink();
+            context.record_symlink(module_path);
             Ok(())
         } else {
             bail!("cannot mount root symlink {}!", self.path.display());
@@ -588,6 +589,16 @@ where
             );
         }
         fs::remove_dir(tmp_dir).ok();
+
+        for (module_id, count) in &context.symlinks_by_module {
+            crate::scoped_log!(
+                debug,
+                "magic",
+                "symlink summary: module={}, mounted_symlinks={}",
+                module_id,
+                count
+            );
+        }
 
         crate::scoped_log!(
             info,
