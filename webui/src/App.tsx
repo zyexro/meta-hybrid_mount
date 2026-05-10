@@ -195,16 +195,16 @@ export default function App() {
     try {
       // uiStore.init() (locale JSON) and wakeDaemon() are independent
       await Promise.all([uiStore.init(), API.wakeDaemon()]);
-      await API.init().then((payload) => {
-        sysStore.loadFromInit(payload);
-        kasumiStore.loadFromInit(payload);
-        configStore.loadFromInit(payload);
-      });
       setInitialDataReady(true);
       window.setTimeout(startRoutePreload, 0);
-      void sysStore.ensureStatusLoaded();
       onSseStateUpdate((state) => sysStore.handleSseUpdate(state));
       onSseStateUpdate((state) => kasumiStore.handleSseUpdate(state));
+      void sysStore.ensureStatusLoaded();
+      void configStore.loadConfig();
+      void sysStore.ensureVersionLoaded();
+      window.setTimeout(() => {
+        void loadInitPayload();
+      }, 0);
     } catch (e) {
       console.error("App initialization failed", e);
       uiStore.showToast(
@@ -213,6 +213,23 @@ export default function App() {
       );
       setInitialDataReady(true);
       return;
+    }
+  }
+
+  async function loadInitPayload() {
+    try {
+      const payload = await API.init();
+      if (disposed) return;
+      sysStore.loadFromInit(payload);
+      kasumiStore.loadFromInit(payload);
+      configStore.loadFromInit(payload);
+    } catch (e) {
+      if (disposed) return;
+      console.error("Background app initialization failed", e);
+      uiStore.showToast(
+        e instanceof Error ? e.message : "App initialization failed",
+        "error",
+      );
     }
   }
 
