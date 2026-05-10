@@ -50,6 +50,8 @@ const createConfigStore = () => {
       const normalized = normalizeConfig(payload.config);
       setConfigStore(reconcile(normalized));
       hasLoaded = true;
+    } else {
+      console.warn("configStore: init payload missing config");
     }
   }
 

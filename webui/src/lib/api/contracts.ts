@@ -14,6 +14,7 @@ export interface InitPayload {
   config: unknown;
   version: string;
   kasumi_status: unknown;
+  system_info: unknown;
 }
 
 export interface AppAPI {

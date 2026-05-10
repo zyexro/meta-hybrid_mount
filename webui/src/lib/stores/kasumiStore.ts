@@ -30,7 +30,11 @@ const createKasumiStore = () => {
         setStatus(s);
         hasLoaded = true;
         lastLoadedAt = Date.now();
+      } else {
+        console.warn("kasumiStore: failed to parse init kasumi_status payload");
       }
+    } else {
+      console.warn("kasumiStore: init payload missing kasumi_status");
     }
   }
 

@@ -192,8 +192,9 @@ export default function App() {
 
   async function initializeApp() {
     try {
-      await uiStore.init();
-      await API.wakeDaemon();
+      // uiStore.init() (locale JSON) and wakeDaemon() are independent
+      await Promise.all([uiStore.init(), API.wakeDaemon()]);
+      startRoutePreload();
       await API.init().then((payload) => {
         sysStore.loadFromInit(payload);
         kasumiStore.loadFromInit(payload);
@@ -201,7 +202,6 @@ export default function App() {
       });
       setInitialDataReady(true);
       void sysStore.ensureStatusLoaded();
-      startRoutePreload();
       onSseStateUpdate((state) => sysStore.handleSseUpdate(state));
       onSseStateUpdate((state) => kasumiStore.handleSseUpdate(state));
     } catch (e) {

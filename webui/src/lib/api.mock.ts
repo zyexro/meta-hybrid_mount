@@ -208,6 +208,14 @@ export const MockAPI: AppAPI = {
         config: { ...DEFAULT_CONFIG.kasumi },
         runtime: { snapshot: {}, kasumi_modules: [], active_mounts: [] },
       },
+      system_info: {
+        kernel: "Linux localhost 5.15.0 #1 SMP PREEMPT",
+        selinux: "Enforcing",
+        mount_base: "/data/adb/meta-hybrid/mnt",
+        active_mounts: ["system", "product"],
+        tmpfs_xattr_supported: false,
+        supported_overlay_modes: ["ext4"],
+      },
     };
   },
   async loadConfig(): Promise<AppConfig> {

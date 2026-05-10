@@ -63,30 +63,14 @@ pub(super) fn dispatch_command(
             let status_value = guard.status_value()?.clone();
             let config_value = to_value(config)?;
             let version_value = to_value(&api::build_version_payload())?;
-            let kasumi_info = kasumi_mount::collect_runtime_info(config);
-            let kasumi_status_value = to_value(&json!({
-                "status": kasumi_info.status,
-                "available": kasumi_info.available,
-                "protocol_version": kasumi_info.protocol_version,
-                "feature_bits": kasumi_info.feature_bits,
-                "feature_names": kasumi_info.feature_names,
-                "hooks": kasumi_info.hooks,
-                "rule_count": kasumi_info.rule_count,
-                "user_hide_rule_count": kasumi_info.user_hide_rule_count,
-                "mirror_path": kasumi_info.mirror_path,
-                "lkm": api::build_lkm_payload(config),
-                "config": config.kasumi.clone(),
-                "runtime": {
-                    "snapshot": guard.kasumi,
-                    "kasumi_modules": &guard.kasumi_modules,
-                    "active_mounts": &guard.active_mounts,
-                }
-            }))?;
+            let kasumi_status_value = build_kasumi_runtime_json(config, &guard)?;
+            let system_info_value = to_value(&api::build_system_info_payload(&guard))?;
             to_value(&json!({
                 "status": status_value,
                 "config": config_value,
                 "version": version_value,
                 "kasumi_status": kasumi_status_value,
+                "system_info": system_info_value,
             }))
         }
         DaemonCommand::Shutdown => {
@@ -223,26 +207,8 @@ pub(super) fn dispatch_command(
             )
         }
         DaemonCommand::KasumiStatus => {
-            let runtime_state = state.lock().expect("daemon state poisoned").clone();
-            let kasumi_info = kasumi_mount::collect_runtime_info(config);
-            to_value(&json!({
-                "status": kasumi_info.status,
-                "available": kasumi_info.available,
-                "protocol_version": kasumi_info.protocol_version,
-                "feature_bits": kasumi_info.feature_bits,
-                "feature_names": kasumi_info.feature_names,
-                "hooks": kasumi_info.hooks,
-                "rule_count": kasumi_info.rule_count,
-                "user_hide_rule_count": kasumi_info.user_hide_rule_count,
-                "mirror_path": kasumi_info.mirror_path,
-                "lkm": api::build_lkm_payload(config),
-                "config": config.kasumi.clone(),
-                "runtime": {
-                    "snapshot": runtime_state.kasumi,
-                    "kasumi_modules": runtime_state.kasumi_modules,
-                    "active_mounts": runtime_state.active_mounts,
-                }
-            }))
+            let guard = state.lock().expect("daemon state poisoned");
+            build_kasumi_runtime_json(config, &guard)
         }
         DaemonCommand::KasumiList => {
             let payload = if kasumi_mount::can_operate(config) {
@@ -552,6 +518,7 @@ fn read_kernel_uname_payload() -> Result<Value> {
 }
 
 fn open_url(url: &str) -> Result<()> {
+    validate_url(url)?;
     let status = Command::new("am")
         .arg("start")
         .arg("-a")
@@ -562,6 +529,20 @@ fn open_url(url: &str) -> Result<()> {
         .context("Failed to start Android VIEW intent")?;
     if !status.success() {
         bail!("am start exited with status {status}");
+    }
+    Ok(())
+}
+
+fn validate_url(url: &str) -> Result<()> {
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        bail!("URL must start with http:// or https://");
+    }
+    if url.contains('\0') || url.contains('\n') || url.contains('\r') {
+        bail!("URL contains invalid control characters");
+    }
+    // Reject URLs that could be misinterpreted as am(1) flags
+    if url.contains(" --") {
+        bail!("URL contains suspicious argument-like patterns");
     }
     Ok(())
 }
@@ -670,6 +651,58 @@ fn detect_rule_file_type(path: &Path) -> Result<i32> {
     }
 }
 
+fn build_kasumi_runtime_json(config: &Config, runtime_state: &RuntimeState) -> Result<Value> {
+    let kasumi_info = kasumi_mount::collect_runtime_info(config);
+    to_value(&json!({
+        "status": kasumi_info.status,
+        "available": kasumi_info.available,
+        "protocol_version": kasumi_info.protocol_version,
+        "feature_bits": kasumi_info.feature_bits,
+        "feature_names": kasumi_info.feature_names,
+        "hooks": kasumi_info.hooks,
+        "rule_count": kasumi_info.rule_count,
+        "user_hide_rule_count": kasumi_info.user_hide_rule_count,
+        "mirror_path": kasumi_info.mirror_path,
+        "lkm": api::build_lkm_payload(config),
+        "config": config.kasumi.clone(),
+        "runtime": {
+            "snapshot": &runtime_state.kasumi,
+            "kasumi_modules": &runtime_state.kasumi_modules,
+            "active_mounts": &runtime_state.active_mounts,
+        }
+    }))
+}
+
 fn to_value<T: Serialize>(payload: &T) -> Result<Value> {
     serde_json::to_value(payload).context("Failed to encode daemon payload")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_url_accepts_http_and_https() {
+        assert!(validate_url("https://example.com").is_ok());
+        assert!(validate_url("http://localhost:8080/path?q=1").is_ok());
+    }
+
+    #[test]
+    fn validate_url_rejects_non_http_schemes() {
+        assert!(validate_url("ftp://example.com").is_err());
+        assert!(validate_url("javascript:alert(1)").is_err());
+        assert!(validate_url("file:///etc/passwd").is_err());
+    }
+
+    #[test]
+    fn validate_url_rejects_flag_like_patterns() {
+        assert!(validate_url("https://example.com --es extra value").is_err());
+    }
+
+    #[test]
+    fn validate_url_rejects_control_chars() {
+        assert!(validate_url("https://example.com\n").is_err());
+        assert!(validate_url("https://example.com\r\n").is_err());
+        assert!(validate_url("https://ex\0ample.com").is_err());
+    }
 }

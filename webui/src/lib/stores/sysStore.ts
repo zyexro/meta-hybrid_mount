@@ -3,9 +3,14 @@ import { API } from "../api";
 import type { InitPayload } from "../api/contracts";
 import { APP_VERSION } from "../constants_gen";
 import { uiStore } from "./uiStore";
-import { isRecord, isString, isStringArray } from "../api/core/guards";
+import {
+  isBoolean,
+  isRecord,
+  isString,
+  isStringArray,
+} from "../api/core/guards";
 import { buildModeStats, buildMountedCount } from "../api/codec/runtimeCodec";
-import type { StorageStatus, SystemInfo } from "../types";
+import type { OverlayMode, StorageStatus, SystemInfo } from "../types";
 
 const createSysStore = () => {
   const [version, setVersion] = createSignal(APP_VERSION);
@@ -27,6 +32,8 @@ const createSysStore = () => {
     if (isString(payload.version)) {
       setVersion(payload.version);
       hasLoadedVersion = true;
+    } else {
+      console.warn("sysStore: init payload missing version");
     }
     const status = isRecord(payload.status) ? payload.status : null;
     if (status) {
@@ -43,6 +50,31 @@ const createSysStore = () => {
       setActivePartitions(
         isStringArray(status.active_mounts) ? status.active_mounts : [],
       );
+    } else {
+      console.warn("sysStore: init payload missing status object");
+    }
+
+    const sysInfo = isRecord(payload.system_info) ? payload.system_info : null;
+    if (sysInfo) {
+      setSystemInfo({
+        kernel: isString(sysInfo.kernel) ? sysInfo.kernel : "Unknown",
+        selinux: isString(sysInfo.selinux) ? sysInfo.selinux : "Unknown",
+        mountBase: isString(sysInfo.mount_base) ? sysInfo.mount_base : "-",
+        activeMounts: isStringArray(sysInfo.active_mounts)
+          ? sysInfo.active_mounts
+          : [],
+        tmpfs_xattr_supported: isBoolean(sysInfo.tmpfs_xattr_supported)
+          ? sysInfo.tmpfs_xattr_supported
+          : undefined,
+        supported_overlay_modes:
+          Array.isArray(sysInfo.supported_overlay_modes) &&
+          sysInfo.supported_overlay_modes.every(isString)
+            ? (sysInfo.supported_overlay_modes as OverlayMode[])
+            : ["tmpfs", "ext4"],
+      });
+      hasLoaded = true;
+    } else {
+      console.warn("sysStore: init payload missing system_info");
     }
   }
 

@@ -15,16 +15,18 @@
 use std::{
     fs,
     io::{BufRead, BufReader, Error as IoError, ErrorKind, Write},
-    os::unix::{
-        fs::PermissionsExt,
-        net::{UnixListener, UnixStream},
+    os::{
+        fd::AsRawFd,
+        unix::{
+            fs::PermissionsExt,
+            net::{UnixListener, UnixStream},
+        },
     },
     path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::Duration,
 };
 
 use anyhow::{Context, Result, bail};
@@ -77,63 +79,95 @@ pub fn serve(_config: crate::conf::config::Config) -> Result<()> {
         webui.base_url()
     );
 
+    let unix_fd = listener.as_raw_fd();
+    let tcp_fd = webui.listener.as_raw_fd();
+    let mut fds = [
+        libc::pollfd {
+            fd: unix_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        },
+        libc::pollfd {
+            fd: tcp_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        },
+    ];
+
     while !shutdown.load(Ordering::Relaxed) {
-        match listener.accept() {
-            Ok((mut stream, _addr)) => {
-                if let Err(err) =
-                    handle_stream(&state, &shutdown, &webui_session, &sse_clients, &mut stream)
-                {
-                    crate::scoped_log!(warn, "daemon", "request failed: error={:#}", err);
-                    let payload = DaemonResponse::error(format!("{err:#}"));
-                    let _ = write_response(&mut stream, &payload);
+        fds[0].revents = 0;
+        fds[1].revents = 0;
+        let ret = unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as libc::nfds_t, 1000) };
+        if ret < 0 {
+            let err = IoError::last_os_error();
+            if err.kind() == ErrorKind::Interrupted {
+                continue;
+            }
+            return Err(err).context("poll failed in daemon event loop");
+        }
+        if ret == 0 {
+            // timeout – loop back to check shutdown flag
+            continue;
+        }
+        if fds[0].revents & libc::POLLIN != 0 {
+            match listener.accept() {
+                Ok((mut stream, _addr)) => {
+                    if let Err(err) =
+                        handle_stream(&state, &shutdown, &webui_session, &sse_clients, &mut stream)
+                    {
+                        crate::scoped_log!(warn, "daemon", "request failed: error={:#}", err);
+                        let payload = DaemonResponse::error(format!("{err:#}"));
+                        let _ = write_response(&mut stream, &payload);
+                    }
+                }
+                Err(err) if err.kind() == ErrorKind::WouldBlock => {}
+                Err(err) => {
+                    crate::scoped_log!(warn, "daemon", "accept failed: error={:#}", err);
                 }
             }
-            Err(err) if err.kind() == ErrorKind::WouldBlock => {}
-            Err(err) => {
-                crate::scoped_log!(warn, "daemon", "accept failed: error={:#}", err);
-            }
         }
-        match webui.listener.accept() {
-            Ok((mut stream, _addr)) => {
-                let Some(connection_guard) =
-                    ActiveWebuiConnectionGuard::try_acquire(&active_webui_connections)
-                else {
-                    let _ = http::write_http_json(
-                        &mut stream,
-                        503,
-                        "Service Unavailable",
-                        &DaemonResponse::error("too many active WebUI daemon connections"),
-                        http::ConnectionAction::Close,
-                    );
-                    continue;
-                };
+        if fds[1].revents & libc::POLLIN != 0 {
+            match webui.listener.accept() {
+                Ok((mut stream, _addr)) => {
+                    let Some(connection_guard) =
+                        ActiveWebuiConnectionGuard::try_acquire(&active_webui_connections)
+                    else {
+                        let _ = http::write_http_json(
+                            &mut stream,
+                            503,
+                            "Service Unavailable",
+                            &DaemonResponse::error("too many active WebUI daemon connections"),
+                            http::ConnectionAction::Close,
+                        );
+                        continue;
+                    };
 
-                let state = state.clone();
-                let shutdown = shutdown.clone();
-                let session = webui_session.clone();
-                let thread_sse = sse_clients.clone();
-                let _ = std::thread::Builder::new()
-                    .name("hybrid-mount-webui-rpc".to_string())
-                    .spawn(move || {
-                        let _connection_guard = connection_guard;
-                        if let Err(err) = http::handle_http_connection(
-                            &state, &shutdown, &session, thread_sse, stream,
-                        ) {
-                            crate::scoped_log!(
-                                warn,
-                                "daemon:http",
-                                "request failed: error={:#}",
-                                err
-                            );
-                        }
-                    });
-            }
-            Err(err) if err.kind() == ErrorKind::WouldBlock => {}
-            Err(err) => {
-                crate::scoped_log!(warn, "daemon:http", "accept failed: error={:#}", err);
+                    let state = state.clone();
+                    let shutdown = shutdown.clone();
+                    let session = webui_session.clone();
+                    let thread_sse = sse_clients.clone();
+                    let _ = std::thread::Builder::new()
+                        .name("hybrid-mount-webui-rpc".to_string())
+                        .spawn(move || {
+                            let _connection_guard = connection_guard;
+                            if let Err(err) = http::handle_http_connection(
+                                &state, &shutdown, &session, thread_sse, stream,
+                            ) {
+                                crate::scoped_log!(
+                                    warn,
+                                    "daemon:http",
+                                    "request failed: error={:#}",
+                                    err
+                                );
+                            }
+                        });
+                }
+                Err(err) if err.kind() == ErrorKind::WouldBlock => {}
+                Err(err) => {
+                    crate::scoped_log!(warn, "daemon:http", "accept failed: error={:#}", err);
+                }
             }
         }
-        std::thread::sleep(Duration::from_millis(10));
     }
 
     crate::scoped_log!(
