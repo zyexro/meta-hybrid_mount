@@ -1,4 +1,38 @@
 
+## v4.0.1
+
+
+### <!-- 1 --> Features
+
+- Enhance daemon and web UI with system info and runtime validation - Refactor server handling to use poll for improved performance. - Introduce system_info in API responses and update related interfaces. - Add URL validation to prevent malformed requests. - Improve error handling in config and kasumi stores with warnings for missing data. - Update App initialization to load UI and daemon concurrently.
+
+- `App` Enhance app initialization phase tracking and loading UI
+
+- `daemon` Add daemon_startup_mode config with persistent boot and webui toggle Add a daemon_startup_mode config option (on-demand / persistent) that controls whether the daemon starts on-demand via KSU exec or persists at boot via service.sh. Includes ping-first bridge optimization for faster reconnection. Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+
+- Update TopBar to provide default app name and language title; add preconnect and styles in index.html
+
+- Add clear mount errors functionality and UI updates - Implemented clearMountErrors API method in both mock and real API. - Updated AppAPI interface to include clearMountErrors. - Added clear-mount-errors command to the daemon command payload. - Enhanced Module interface to include mount_error property. - Added localization strings for mount error messages in multiple languages. - Introduced error indicators and banners in the ModulesTab component to display mount errors. - Added a button to clear mount errors, with loading state management.
+
+- Enhance mount error handling and add clear mount errors functionality
+
+
+
+### <!-- 2 --> Fixes
+
+- `schema` Replace manual Default impl with derive macro for DaemonStartupMode
+
+- `nuke` Skip nuke execution if KSU is not loaded
+
+
+
+### <!-- 8 --> Maintenance
+
+- Revert "feat(App): enhance app initialization phase tracking and loading UI" This reverts commit 08534f6f316b3f73ca2e09b95efdea4a5f8ff8ba.
+
+
+
+
 ## v4.0.0
 
 
