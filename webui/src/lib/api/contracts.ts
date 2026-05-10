@@ -64,6 +64,7 @@ export interface AppAPI {
   setKasumiLkmKmi: (value: string) => Promise<void>;
   clearKasumiLkmKmi: () => Promise<void>;
   fixKasumiMounts: () => Promise<void>;
+  clearMountErrors: () => Promise<void>;
   clearKasumiRules: () => Promise<void>;
   releaseKasumiConnection: () => Promise<void>;
   invalidateKasumiCache: () => Promise<void>;

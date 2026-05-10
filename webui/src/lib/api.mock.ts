@@ -415,6 +415,9 @@ export const MockAPI: AppAPI = {
     );
     mockState.kasumi.mapsRules.push(nextRule);
   },
+  async clearMountErrors(): Promise<void> {
+    await delay(180);
+  },
   async clearKasumiMapsRules(): Promise<void> {
     await delay(180);
     mockState.kasumi.mapsRules = [];

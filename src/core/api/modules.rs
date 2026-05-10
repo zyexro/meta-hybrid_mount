@@ -37,6 +37,8 @@ pub struct ModuleListEntry {
     pub enabled: bool,
     pub source_path: PathBuf,
     pub rules: ModuleRules,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -123,6 +125,8 @@ fn build_scanned_modules_payload(
         let runtime_mode = enabled.then(|| runtime_index.mode(&id)).flatten();
         let mode = runtime_mode.unwrap_or(rules.default_mode);
 
+        let mount_error = runtime_index.mount_error_reason(&id);
+
         modules.push(ModuleListEntry {
             id,
             mode,
@@ -130,6 +134,7 @@ fn build_scanned_modules_payload(
             enabled,
             source_path: module_path,
             rules,
+            mount_error,
         });
     }
 
@@ -155,6 +160,7 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
             let runtime_mode = runtime_index.mode(&id);
             let mode = runtime_mode.unwrap_or(rules.default_mode);
             let enabled = runtime_index.enabled(&id);
+            let mount_error = runtime_index.mount_error_reason(&id);
 
             ModuleListEntry {
                 id,
@@ -163,6 +169,7 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
                 enabled,
                 source_path,
                 rules,
+                mount_error,
             }
         })
         .collect()
@@ -222,6 +229,8 @@ struct RuntimeModuleIndex<'a> {
     magic: HashSet<&'a str>,
     kasumi: HashSet<&'a str>,
     skipped: HashSet<&'a str>,
+    mount_errors: HashSet<&'a str>,
+    mount_error_reasons: &'a std::collections::BTreeMap<String, String>,
 }
 
 impl<'a> RuntimeModuleIndex<'a> {
@@ -235,6 +244,12 @@ impl<'a> RuntimeModuleIndex<'a> {
                 .iter()
                 .map(String::as_str)
                 .collect(),
+            mount_errors: state
+                .mount_error_modules
+                .iter()
+                .map(String::as_str)
+                .collect(),
+            mount_error_reasons: &state.mount_error_reasons,
         }
     }
 
@@ -253,6 +268,13 @@ impl<'a> RuntimeModuleIndex<'a> {
 
     fn enabled(&self, module_id: &str) -> bool {
         !self.skipped.contains(module_id)
+    }
+
+    fn mount_error_reason(&self, module_id: &str) -> Option<String> {
+        if !self.mount_errors.contains(module_id) {
+            return None;
+        }
+        self.mount_error_reasons.get(module_id).cloned()
     }
 }
 

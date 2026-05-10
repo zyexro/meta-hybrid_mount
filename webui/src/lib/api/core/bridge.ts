@@ -43,6 +43,7 @@ export type DaemonCommandPayload =
   | { type: "api-reboot" }
   | { type: "api-kasumi-maps-add"; rule: unknown }
   | { type: "api-kasumi-maps-clear" }
+  | { type: "clear-mount-errors" }
   | { type: "kasumi-status" }
   | { type: "kasumi-list" }
   | { type: "kasumi-version" }

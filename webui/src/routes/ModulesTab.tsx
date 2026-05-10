@@ -12,6 +12,7 @@ import { uiStore } from "../lib/stores/uiStore";
 import { moduleStore } from "../lib/stores/moduleStore";
 import { kasumiStore } from "../lib/stores/kasumiStore";
 import { ICONS } from "../lib/constants";
+import { API } from "../lib/api";
 import Skeleton from "../components/Skeleton";
 import BottomActions from "../components/BottomActions";
 import { normalizeMountMode } from "../lib/api/core/guards";
@@ -107,6 +108,32 @@ export default function ModulesTab() {
       return true;
     }),
   );
+  const [clearingErrors, setClearingErrors] = createSignal(false);
+  const hasMountErrors = createMemo(() =>
+    filteredModules().some((m) => !!m.mount_error),
+  );
+
+  async function clearMountErrors() {
+    setClearingErrors(true);
+    try {
+      await API.clearMountErrors();
+      uiStore.showToast(
+        uiStore.L.modules?.mountErrorsCleared || "Mount errors cleared",
+        "success",
+      );
+      await moduleStore.loadModules(true);
+    } catch (e: any) {
+      uiStore.showToast(
+        e?.message ||
+          uiStore.L.modules?.mountErrorsClearFailed ||
+          "Failed to clear mount errors",
+        "error",
+      );
+    } finally {
+      setClearingErrors(false);
+    }
+  }
+
   const canLoadMore = createMemo(
     () => visibleCount() < filteredModules().length,
   );
@@ -273,8 +300,18 @@ export default function ModulesTab() {
                             <span class="version-badge">{mod.version}</span>
                           </div>
                         </div>
-                        <div class={`mode-indicator ${getModeClass(mod)}`}>
-                          {getModeLabel(mod)}
+                        <div class="mode-group">
+                          <div class={`mode-indicator ${getModeClass(mod)}`}>
+                            {getModeLabel(mod)}
+                          </div>
+                          <Show when={mod.mount_error}>
+                            <div
+                              class="error-indicator"
+                              title={mod.mount_error}
+                            >
+                              ERROR
+                            </div>
+                          </Show>
                         </div>
                       </button>
 
@@ -282,6 +319,24 @@ export default function ModulesTab() {
                         <div class="module-body-inner">
                           <div class="module-body-content">
                             <p class="module-desc">{mod.description}</p>
+
+                            <Show when={mod.mount_error}>
+                              <div class="error-banner">
+                                <svg
+                                  class="error-icon"
+                                  viewBox="0 0 24 24"
+                                  width="16"
+                                  height="16"
+                                >
+                                  <path d={ICONS.bug} fill="currentColor" />
+                                </svg>
+                                <span class="error-text">
+                                  {uiStore.L.modules?.mountError ||
+                                    "Mount Error"}
+                                  : {mod.mount_error}
+                                </span>
+                              </div>
+                            </Show>
 
                             <div class="body-section">
                               <div class="section-label">
@@ -378,6 +433,15 @@ export default function ModulesTab() {
       </div>
 
       <BottomActions>
+        <Show when={hasMountErrors()}>
+          <md-filled-tonal-button
+            onClick={clearMountErrors}
+            disabled={clearingErrors()}
+          >
+            {uiStore.L.modules?.clearMountErrors ?? "Clear Mount Errors"}
+          </md-filled-tonal-button>
+        </Show>
+
         <Show when={canLoadMore()}>
           <md-filled-tonal-button onClick={loadMore}>
             {uiStore.L.modules?.loadMore ?? "Load More"}

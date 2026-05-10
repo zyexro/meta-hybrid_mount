@@ -97,7 +97,11 @@
     "disableTag": "無効",
     "nativeTag": "ステルス",
     "unavailableTag": "利用不可",
-    "kasumiUnavailableHint": "Kasumi は有効ですが、現在は利用できません。"
+    "kasumiUnavailableHint": "Kasumi は有効ですが、現在は利用できません。",
+    "mountError": "マウントエラー",
+    "clearMountErrors": "マウントエラーをクリア",
+    "mountErrorsCleared": "マウントエラーをクリアしました",
+    "mountErrorsClearFailed": "マウントエラーのクリアに失敗"
   },
   "kasumi": {
     "title": "Kasumi の動作状態",

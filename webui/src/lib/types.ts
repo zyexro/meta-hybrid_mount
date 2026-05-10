@@ -30,6 +30,7 @@ export interface Module {
   enabled?: boolean;
   source_path?: string;
   rules: ModuleRules;
+  mount_error?: string;
 }
 
 export interface StorageStatus {

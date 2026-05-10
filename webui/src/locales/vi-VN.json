@@ -97,7 +97,11 @@
     "disableTag": "Tắt",
     "nativeTag": "Ẩn thân",
     "unavailableTag": "Không khả dụng",
-    "kasumiUnavailableHint": "Kasumi đã được bật nhưng hiện không khả dụng."
+    "kasumiUnavailableHint": "Kasumi đã được bật nhưng hiện không khả dụng.",
+    "mountError": "Lỗi mount",
+    "clearMountErrors": "Xóa lỗi mount",
+    "mountErrorsCleared": "Đã xóa lỗi mount",
+    "mountErrorsClearFailed": "Không thể xóa lỗi mount"
   },
   "kasumi": {
     "title": "Trạng thái Kasumi",

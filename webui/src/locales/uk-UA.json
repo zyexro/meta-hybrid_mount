@@ -97,7 +97,11 @@
     "disableTag": "Вимкнено",
     "nativeTag": "Стелс",
     "unavailableTag": "Недоступно",
-    "kasumiUnavailableHint": "Kasumi увімкнено, але зараз він недоступний."
+    "kasumiUnavailableHint": "Kasumi увімкнено, але зараз він недоступний.",
+    "mountError": "Помилка монтування",
+    "clearMountErrors": "Очистити помилки",
+    "mountErrorsCleared": "Помилки очищено",
+    "mountErrorsClearFailed": "Не вдалося очистити помилки"
   },
   "kasumi": {
     "title": "Стан Kasumi",

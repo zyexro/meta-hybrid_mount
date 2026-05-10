@@ -58,6 +58,11 @@ const RealAPI: AppAPI = {
   restoreKasumiUnameGlobal: kasumiService.restoreKasumiUnameGlobal,
   setKasumiCmdline: kasumiService.setKasumiCmdline,
   clearKasumiCmdline: kasumiService.clearKasumiCmdline,
+  clearMountErrors: () =>
+    runDaemonCommand(
+      { type: "clear-mount-errors" },
+      PATHS.BINARY,
+    ) as Promise<void>,
   addKasumiMapsRule: kasumiService.addKasumiMapsRule,
   clearKasumiMapsRules: kasumiService.clearKasumiMapsRules,
   getUserHideRules: kasumiService.getUserHideRules,

@@ -452,6 +452,16 @@ pub(super) fn dispatch_command(
                 }),
             )
         }
+        DaemonCommand::ClearMountErrors => {
+            let mut guard = state.lock().expect("daemon state poisoned");
+            let cleared = guard.mount_error_modules.len();
+            guard.mount_error_modules.clear();
+            guard.mount_error_reasons.clear();
+            guard.save()?;
+            drop(guard);
+            http::broadcast_sse_event(state, sse_clients, "state_update");
+            to_value(&json!({ "cleared": cleared }))
+        }
         DaemonCommand::Batch { commands } => {
             let noop_clients = Arc::new(Mutex::new(Vec::new()));
             let mut results: Vec<Value> = Vec::with_capacity(commands.len());

@@ -14,7 +14,7 @@
 
 use std::{
     io::{BufRead, BufReader, Write},
-    os::unix::net::UnixStream,
+    os::unix::{net::UnixStream, process::CommandExt},
     process::{Command, Stdio},
     thread,
     time::Duration,
@@ -122,16 +122,27 @@ fn wake_daemon(cli: &Cli) -> Result<()> {
         .stdout(Stdio::null())
         .stderr(Stdio::null());
 
-    let mut child = command.spawn().context("Failed to spawn daemon serve")?;
+    // Detach daemon from terminal: setsid + double-fork → reparent to init (PID 1)
+    unsafe {
+        command.pre_exec(|| {
+            if libc::setsid() < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            match libc::fork() {
+                -1 => Err(std::io::Error::last_os_error()),
+                0 => Ok(()),
+                _ => libc::_exit(0),
+            }
+        });
+    }
+
+    let mut intermediate = command.spawn().context("Failed to spawn daemon serve")?;
+    // intermediate process already exited via _exit(0); wait to reap its zombie
+    let _ = intermediate.wait();
+
     for _ in 0..30 {
         if connect_socket().is_ok() {
             return Ok(());
-        }
-        if let Some(status) = child
-            .try_wait()
-            .context("Failed to poll daemon serve process")?
-        {
-            bail!("daemon serve exited with status {status}");
         }
         thread::sleep(Duration::from_millis(100));
     }

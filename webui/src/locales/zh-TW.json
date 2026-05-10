@@ -97,7 +97,11 @@
     "disableTag": "停用",
     "nativeTag": "隱身",
     "unavailableTag": "不可用",
-    "kasumiUnavailableHint": "Kasumi 已啟用，但目前不可用。"
+    "kasumiUnavailableHint": "Kasumi 已啟用，但目前不可用。",
+    "mountError": "掛載錯誤",
+    "clearMountErrors": "清除掛載錯誤",
+    "mountErrorsCleared": "掛載錯誤已清除",
+    "mountErrorsClearFailed": "清除掛載錯誤失敗"
   },
   "kasumi": {
     "title": "Kasumi 工作狀態",

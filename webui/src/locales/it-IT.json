@@ -97,7 +97,11 @@
     "disableTag": "Disabilitato",
     "nativeTag": "Furtivo",
     "unavailableTag": "Non disponibile",
-    "kasumiUnavailableHint": "Kasumi e abilitato, ma al momento non e disponibile."
+    "kasumiUnavailableHint": "Kasumi e abilitato, ma al momento non e disponibile.",
+    "mountError": "Errore di mount",
+    "clearMountErrors": "Cancella errori",
+    "mountErrorsCleared": "Errori cancellati",
+    "mountErrorsClearFailed": "Cancellazione errori fallita"
   },
   "kasumi": {
     "title": "Runtime Kasumi",

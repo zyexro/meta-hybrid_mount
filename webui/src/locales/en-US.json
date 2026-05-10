@@ -98,7 +98,11 @@
     "disableTag": "Disable",
     "nativeTag": "Stealth",
     "unavailableTag": "Unavailable",
-    "kasumiUnavailableHint": "Kasumi is enabled but not currently available."
+    "kasumiUnavailableHint": "Kasumi is enabled but not currently available.",
+    "mountError": "Mount Error",
+    "clearMountErrors": "Clear Mount Errors",
+    "mountErrorsCleared": "Mount errors cleared",
+    "mountErrorsClearFailed": "Failed to clear mount errors"
   },
   "kasumi": {
     "title": "Kasumi Runtime",

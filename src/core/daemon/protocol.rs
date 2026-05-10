@@ -117,6 +117,7 @@ pub enum DaemonCommand {
         target_base: PathBuf,
         source_dir: PathBuf,
     },
+    ClearMountErrors,
     Batch {
         commands: Vec<DaemonCommand>,
     },
