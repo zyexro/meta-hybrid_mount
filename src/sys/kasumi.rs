@@ -67,6 +67,7 @@ pub const KSM_FEATURE_MOUNT_HIDE: c_int = uapi::KSM_FEATURE_MOUNT_HIDE as c_int;
 pub const KSM_FEATURE_MAPS_SPOOF: c_int = uapi::KSM_FEATURE_MAPS_SPOOF as c_int;
 pub const KSM_FEATURE_STATFS_SPOOF: c_int = uapi::KSM_FEATURE_STATFS_SPOOF as c_int;
 pub const KSM_FEATURE_FAKE_MOUNTINFO: c_int = uapi::KSM_FEATURE_FAKE_MOUNTINFO as c_int;
+pub const KSM_FEATURE_FAKE_SELINUXFS: c_int = uapi::KSM_FEATURE_FAKE_SELINUXFS as c_int;
 
 #[allow(clippy::unnecessary_cast)]
 const KSM_IOC_MAGIC: u8 = uapi::KSM_IOC_MAGIC as u8;
@@ -409,6 +410,7 @@ const FEATURE_NAMES: &[(c_int, &str)] = &[
     (KSM_FEATURE_MAPS_SPOOF, "maps_spoof"),
     (KSM_FEATURE_STATFS_SPOOF, "statfs_spoof"),
     (KSM_FEATURE_FAKE_MOUNTINFO, "fake_mountinfo"),
+    (KSM_FEATURE_FAKE_SELINUXFS, "fake_selinuxfs"),
 ];
 
 pub fn feature_names(bits: c_int) -> Vec<String> {
