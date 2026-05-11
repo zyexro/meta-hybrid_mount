@@ -676,9 +676,10 @@ mod tests {
     }
 
     fn test_config() -> config::Config {
-        let mut config = config::Config::default();
-        config.mountsource = "test".to_string();
-        config
+        config::Config {
+            mountsource: "test".to_string(),
+            ..config::Config::default()
+        }
     }
 
     fn prepare_with_root(
