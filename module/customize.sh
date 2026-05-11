@@ -23,19 +23,18 @@ fi
 unzip -o "$ZIPFILE" -d "$MODPATH" >&2
 case "$ARCH" in
 "arm64")
-  ABI="arm64-v8a"
   ;;
 *)
   abort "! Unsupported architecture: $ARCH (Hybrid Mount now supports arm64 only)"
   ;;
 esac
-ui_print "- Device Architecture: $ARCH ($ABI)"
-BIN_SOURCE="$MODPATH/binaries/$ABI/hybrid-mount"
+ui_print "- Device Architecture: $ARCH"
+BIN_SOURCE="$MODPATH/binaries/hybrid-mount"
 BIN_TARGET="$MODPATH/hybrid-mount"
 if [ ! -f "$BIN_SOURCE" ]; then
-  abort "! Binary for $ABI not found in this zip!"
+  abort "! Binary not found in this zip!"
 fi
-ui_print "- Installing binary for $ABI..."
+ui_print "- Installing binary..."
 cp -f "$BIN_SOURCE" "$BIN_TARGET"
 set_perm "$BIN_TARGET" 0 0 0755
 rm -rf "$MODPATH/binaries"

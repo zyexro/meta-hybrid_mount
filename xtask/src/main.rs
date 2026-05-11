@@ -41,11 +41,6 @@ enum Arch {
 }
 
 impl Arch {
-    fn target(&self) -> &'static str {
-        match self {
-            Arch::Arm64 => "arm64-v8a",
-        }
-    }
     fn android_abi(&self) -> &'static str {
         match self {
             Arch::Arm64 => "aarch64-linux-android",
@@ -187,7 +182,7 @@ fn build_full(
             .join(arch.android_abi())
             .join(profile)
             .join(bin_name);
-        let stage_bin_dir = stage_dir.join("binaries").join(arch.target());
+        let stage_bin_dir = stage_dir.join("binaries");
         fs::create_dir_all(&stage_bin_dir)?;
         if src_bin.exists() {
             file::copy(
@@ -412,7 +407,7 @@ fn generate_webui_constants(version: &str, is_release: bool) -> Result<()> {
     Ok(())
 }
 
-fn compile_core(release: bool, arch: Arch) -> Result<()> {
+fn compile_core(release: bool, _arch: Arch) -> Result<()> {
     let mut cmd = Command::new("cargo");
     cmd.args([
         "+nightly",
@@ -426,7 +421,7 @@ fn compile_core(release: bool, arch: Arch) -> Result<()> {
         "--platform",
         "26",
         "-t",
-        arch.target(),
+        "arm64-v8a",
         "build",
     ])
     .env("RUSTFLAGS", "-C default-linker-libraries");
@@ -436,7 +431,7 @@ fn compile_core(release: bool, arch: Arch) -> Result<()> {
     let mut ret = cmd.spawn()?;
     let status = ret.wait()?;
     if !status.success() {
-        anyhow::bail!("Compilation failed for {}", arch.target());
+        anyhow::bail!("Compilation failed for arm64-v8a");
     }
     Ok(())
 }
