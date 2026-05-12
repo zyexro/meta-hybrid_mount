@@ -75,6 +75,7 @@ pub fn is_mounted<P: AsRef<Path>>(path: P) -> bool {
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
+#[allow(dead_code)]
 pub fn mount_tmpfs(target: &Path, source: &str) -> Result<()> {
     crate::scoped_log!(
         info,

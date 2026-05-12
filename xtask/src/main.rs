@@ -341,12 +341,9 @@ fn configure_flavor_config(stage_dir: &Path, flavor: BuildFlavor) -> Result<()> 
     let config_path = stage_dir.join("config.toml");
     let content = fs::read_to_string(&config_path)
         .with_context(|| format!("failed to read staged config {}", config_path.display()))?;
-    let mut value = strip_toml_preamble(&content)
-        .parse::<toml::Value>()
+    let mut table = strip_toml_preamble(&content)
+        .parse::<toml::Table>()
         .with_context(|| format!("failed to parse staged config {}", config_path.display()))?;
-    let table = value
-        .as_table_mut()
-        .ok_or_else(|| anyhow::anyhow!("staged config root is not a table"))?;
     table.insert(
         "default_mode".to_string(),
         toml::Value::String("magic".to_string()),
@@ -360,7 +357,7 @@ fn configure_flavor_config(stage_dir: &Path, flavor: BuildFlavor) -> Result<()> 
                 .collect(),
         ),
     );
-    fs::write(&config_path, toml::to_string_pretty(&value)?)
+    fs::write(&config_path, toml::to_string_pretty(&table)?)
         .with_context(|| format!("failed to write staged config {}", config_path.display()))?;
     Ok(())
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
+#[allow(dead_code)]
 pub const HYBRID_MOUNT_DIR: &str = "/data/adb/hybrid-mount";
 pub const MODULES_DIR: &str = "/data/adb/modules";
 #[allow(dead_code)]
