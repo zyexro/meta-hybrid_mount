@@ -247,19 +247,33 @@ jobs:
           body_path: /tmp/changelog.md
 
       - name: Create Remote Release (KernelSU-Repo)
-        uses: softprops/action-gh-release@v3
         if: startsWith(github.ref, 'refs/tags/')
-        with:
-          token: ${{ secrets.RELEASE_TOKEN }}
-          repository: KernelSU-Modules-Repo/hybrid_mount
-          tag_name: ${{ github.ref_name }}
-          draft: false
-          prerelease: ${{ steps.release_type.outputs.prerelease }}
-          files: |
-            ${{ env.FULL_ZIP_PATH }}
-            ${{ env.LITE_ZIP_PATH }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="KernelSU-Modules-Repo/hybrid_mount"
+          tag="${{ github.ref_name }}"
+          prerelease="${{ steps.release_type.outputs.prerelease }}"
+
+          prerelease_flag=""
+          if [[ "$prerelease" == "true" ]]; then
+            prerelease_flag="--prerelease"
+          fi
+
+          gh release create "$tag" \
+            --repo "$repo" \
+            --draft \
+            $prerelease_flag \
+            --title "$tag" \
+            --notes-file /tmp/changelog.md \
+            ${{ env.FULL_ZIP_PATH }} \
+            ${{ env.LITE_ZIP_PATH }} \
             ${{ env.NANO_ZIP_PATH }}
-          body_path: /tmp/changelog.md
+
+          gh release edit "$tag" \
+            --repo "$repo" \
+            --draft=false
 
       - name: Sync Version to Main
         if: startsWith(github.ref, 'refs/tags/')
