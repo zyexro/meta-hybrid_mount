@@ -182,10 +182,12 @@ impl<'a> CommandContext<'a> {
         to_value(&payload)
     }
 
+    #[cfg(feature = "kasumi")]
     fn refresh_current<T: Serialize>(&self, payload: T) -> Result<Value> {
         self.refresh(self.config, payload)
     }
 
+    #[cfg(feature = "kasumi")]
     fn refresh_message(&self, message: &'static str) -> Result<Value> {
         self.refresh_current(json!({ "message": message }))
     }

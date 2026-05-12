@@ -54,6 +54,7 @@ pub fn resolve_link_path(path: &Path) -> PathBuf {
     }
 }
 
+#[cfg(feature = "kasumi")]
 pub fn resolve_path_with_root(system_root: &Path, path: &Path) -> PathBuf {
     let virtual_path = if path.is_absolute() {
         path.to_path_buf()

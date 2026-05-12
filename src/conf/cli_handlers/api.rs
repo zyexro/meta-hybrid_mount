@@ -29,10 +29,10 @@ fn print_json<T: serde::Serialize>(payload: &T, description: &str) -> Result<()>
 pub fn handle_api_features() -> Result<()> {
     #[cfg(not(feature = "kasumi"))]
     {
-        return print_json(
+        print_json(
             &serde_json::json!({ "bitmask": 0, "names": [] }),
             "features payload",
-        );
+        )
     }
 
     #[cfg(feature = "kasumi")]

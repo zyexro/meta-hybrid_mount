@@ -28,16 +28,19 @@ use rustix::fs::ioctl_ficlone;
 use rustix::fs::{CWD, FileType, Gid, Mode, Uid, chown, mknodat};
 use walkdir::WalkDir;
 
+#[cfg(feature = "kasumi")]
 use crate::defs;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::sys::fs::{lgetfilecon, lsetfilecon};
 
 #[derive(Debug, Default)]
+#[cfg(feature = "kasumi")]
 pub struct SyncDirStats {
     pub has_mount_content: bool,
     pub opaque_dirs: Vec<PathBuf>,
 }
 
+#[cfg(feature = "kasumi")]
 fn is_managed_partition_path(relative: &Path, managed_partitions: &[String]) -> bool {
     relative
         .components()
@@ -423,6 +426,7 @@ fn make_device_node(path: &Path, mode: u32, rdev: u64) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "kasumi")]
 fn native_cp_r(
     src: &Path,
     dst: &Path,
@@ -472,6 +476,7 @@ fn native_cp_r(
     Ok(())
 }
 
+#[cfg(feature = "kasumi")]
 pub fn sync_dir(src: &Path, dst: &Path, managed_partitions: &[String]) -> Result<SyncDirStats> {
     if !src.exists() {
         return Ok(SyncDirStats::default());

@@ -18,6 +18,7 @@ pub const MODULES_DIR: &str = "/data/adb/modules";
 pub const HYBRID_MOUNT_MODULE_DIR: &str = "/data/adb/modules/hybrid_mount";
 
 pub const MODULES_IMG_FILE: &str = "/data/adb/hybrid-mount/modules.img";
+#[allow(dead_code)]
 pub const KASUMI_IMG_FILE: &str = "/data/adb/hybrid-mount/kasumi.img";
 pub const RUN_DIR: &str = "/data/adb/hybrid-mount/run/";
 pub const STATE_FILE: &str = "/data/adb/hybrid-mount/run/daemon_state.json";
@@ -25,10 +26,12 @@ pub const SOCKET_FILE: &str = "/data/adb/hybrid-mount/run/daemon.sock";
 pub const PID_FILE: &str = "/data/adb/hybrid-mount/run/daemon.pid";
 pub const SYSTEM_RW_DIR: &str = "/data/adb/hybrid-mount/rw";
 pub const CONFIG_FILE: &str = "/data/adb/hybrid-mount/config.toml";
+#[allow(dead_code)]
 pub const USER_HIDE_RULES_FILE: &str = "/data/adb/hybrid-mount/user_hide_rules.json";
 pub const MODULE_PROP_FILE: &str = "/data/adb/modules/hybrid_mount/module.prop";
 pub const KASUMI_MIRROR_DIR: &str = "/dev/kasumi_mirror";
 pub const KASUMI_LKM_DIR: &str = "/data/adb/modules/hybrid_mount/kasumi_lkm";
+#[allow(dead_code)]
 pub const KASUMI_LKM_MODULE_NAME: &str = "kasumi_lkm";
 
 pub const DISABLE_FILE_NAME: &str = "disable";

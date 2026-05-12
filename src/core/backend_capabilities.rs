@@ -27,10 +27,10 @@ impl BackendCapabilities {
         #[cfg(not(feature = "kasumi"))]
         {
             let _ = config;
-            return Self {
+            Self {
                 kasumi_status: "disabled".to_string(),
                 kasumi_usable: false,
-            };
+            }
         }
 
         #[cfg(feature = "kasumi")]

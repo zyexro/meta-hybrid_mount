@@ -470,8 +470,11 @@ fn prepare_mount_plan_with_root(
 
     let plan = MountPlan {
         overlay_ops,
+        #[cfg(feature = "kasumi")]
         kasumi_add_rules: Vec::new(),
+        #[cfg(feature = "kasumi")]
         kasumi_merge_rules: Vec::new(),
+        #[cfg(feature = "kasumi")]
         kasumi_hide_rules: Vec::new(),
         overlay_module_ids: sorted_ids(overlay_module_ids),
         magic_module_ids: sorted_ids(magic_ids),

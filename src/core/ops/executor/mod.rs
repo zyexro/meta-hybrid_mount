@@ -202,9 +202,12 @@ impl Executor {
             );
         }
 
-        plan.kasumi_add_rules.clear();
-        plan.kasumi_merge_rules.clear();
-        plan.kasumi_hide_rules.clear();
+        #[cfg(feature = "kasumi")]
+        {
+            plan.kasumi_add_rules.clear();
+            plan.kasumi_merge_rules.clear();
+            plan.kasumi_hide_rules.clear();
+        }
         let final_kasumi_ids = plan.kasumi_module_ids.clone();
 
         let magic_need_list: Vec<String> = final_magic_ids.iter().cloned().collect();
