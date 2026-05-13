@@ -167,8 +167,8 @@ impl NotificationContext<'_> {
             self.safe_commit_msg,
             self.commit_link,
         );
-        let mut msg = SendMessage::new(self.chat_id.to_owned(), text)
-            .with_parse_mode(ParseMode::Html);
+        let mut msg =
+            SendMessage::new(self.chat_id.to_owned(), text).with_parse_mode(ParseMode::Html);
         if let Some(topic_id) = self.request.topic_id {
             msg = msg.with_message_thread_id(topic_id);
         }
