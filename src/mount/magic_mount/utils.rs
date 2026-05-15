@@ -139,16 +139,18 @@ where
 
 fn should_fallback_overlay_files(
     rules: &ModuleRules,
+    descendant_rule_prefixes: &HashSet<String>,
     relative_path: &Path,
     use_kasumi: bool,
     overlay_fallback_enabled: bool,
 ) -> bool {
+    let relative = relative_path.to_string_lossy();
     overlay_fallback_enabled
         && matches!(
             rules.effective_mode(relative_path, use_kasumi),
             MountMode::Overlay
         )
-        && rules.has_descendant_rule(relative_path)
+        && descendant_rule_prefixes.contains(relative.as_ref())
 }
 
 fn collect_magic_subtree(
@@ -156,12 +158,18 @@ fn collect_magic_subtree(
     module_dir: &Path,
     relative_path: &Path,
     rules: &ModuleRules,
+    descendant_rule_prefixes: &HashSet<String>,
     use_kasumi: bool,
     overlay_fallback_enabled: bool,
 ) -> Result<bool> {
     let mut has_file = false;
-    let overlay_file_fallback =
-        should_fallback_overlay_files(rules, relative_path, use_kasumi, overlay_fallback_enabled);
+    let overlay_file_fallback = should_fallback_overlay_files(
+        rules,
+        descendant_rule_prefixes,
+        relative_path,
+        use_kasumi,
+        overlay_fallback_enabled,
+    );
 
     for entry_result in module_dir.read_dir()? {
         let entry = match entry_result {
@@ -182,11 +190,13 @@ fn collect_magic_subtree(
         let name = file_name.to_string_lossy().into_owned();
         let entry_path = entry.path();
         let next_relative = relative_path.join(&file_name);
+        let next_relative_key = next_relative.to_string_lossy();
         let effective_mode = rules.effective_mode(&next_relative, use_kasumi);
 
         match entry.file_type() {
             Ok(file_type) if file_type.is_dir() => {
-                let has_descendant_rules = rules.has_descendant_rule(&next_relative);
+                let has_descendant_rules =
+                    descendant_rule_prefixes.contains(next_relative_key.as_ref());
                 if matches!(effective_mode, MountMode::Magic) && !has_descendant_rules {
                     if let Some(mut node) = Node::new_module(&name, &entry) {
                         let subtree_has_file =
@@ -211,6 +221,7 @@ fn collect_magic_subtree(
                     &entry_path,
                     &next_relative,
                     rules,
+                    descendant_rule_prefixes,
                     use_kasumi,
                     overlay_fallback_enabled,
                 )? || node.replace;
@@ -378,6 +389,7 @@ pub fn collect_module_files(
             "module collect: path={}",
             module_path.display()
         );
+        let descendant_rule_prefixes = rules.descendant_rule_prefixes();
 
         for p in touched_partitions {
             if p == "system" {
@@ -386,6 +398,7 @@ pub fn collect_module_files(
                     &module_path.join(&p),
                     Path::new(&p),
                     rules,
+                    &descendant_rule_prefixes,
                     use_kasumi,
                     overlay_fallback_enabled,
                 )?);
@@ -407,6 +420,7 @@ pub fn collect_module_files(
                 &module_path.join(&p),
                 Path::new(&p),
                 rules,
+                &descendant_rule_prefixes,
                 use_kasumi,
                 overlay_fallback_enabled,
             )?);

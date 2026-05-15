@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -66,23 +69,12 @@ pub struct ModuleRules {
 
 impl ModuleRules {
     pub fn get_mode(&self, relative_path: &str) -> MountMode {
-        let mut best_match = None;
-        let mut best_len = 0usize;
-
-        for (path, mode) in &self.paths {
-            let is_exact = relative_path == path;
-            let is_prefix = relative_path.len() > path.len()
-                && relative_path.starts_with(path)
-                && relative_path.as_bytes().get(path.len()) == Some(&b'/');
-
-            if (is_exact || is_prefix) && path.len() >= best_len {
-                best_match = Some(*mode);
-                best_len = path.len();
+        let mut candidate = Some(relative_path);
+        while let Some(path) = candidate {
+            if let Some(mode) = self.paths.get(path) {
+                return *mode;
             }
-        }
-
-        if let Some(mode) = best_match {
-            return mode;
+            candidate = path.rsplit_once('/').map(|(parent, _)| parent);
         }
 
         self.default_mode
@@ -101,6 +93,21 @@ impl ModuleRules {
         let relative = relative_path.to_string_lossy();
         let prefix = format!("{relative}/");
         self.paths.keys().any(|path| path.starts_with(&prefix))
+    }
+
+    pub fn descendant_rule_prefixes(&self) -> HashSet<String> {
+        let mut prefixes = HashSet::new();
+        for path in self.paths.keys() {
+            let mut current = path.as_str();
+            while let Some((parent, _)) = current.rsplit_once('/') {
+                if parent.is_empty() {
+                    break;
+                }
+                prefixes.insert(parent.to_string());
+                current = parent;
+            }
+        }
+        prefixes
     }
 }
 
@@ -168,5 +175,23 @@ mod tests {
         // deeper path components
         let rules = make_rules(MountMode::Overlay, &[("system/", MountMode::Magic)]);
         assert_eq!(rules.get_mode("system"), MountMode::Overlay);
+    }
+
+    #[test]
+    fn descendant_rule_prefixes_include_rule_ancestors_only() {
+        let rules = make_rules(
+            MountMode::Overlay,
+            &[
+                ("system/app/private", MountMode::Magic),
+                ("vendor/lib", MountMode::Kasumi),
+            ],
+        );
+        let prefixes = rules.descendant_rule_prefixes();
+
+        assert!(prefixes.contains("system"));
+        assert!(prefixes.contains("system/app"));
+        assert!(prefixes.contains("vendor"));
+        assert!(!prefixes.contains("system/app/private"));
+        assert!(!prefixes.contains("vendor/lib"));
     }
 }

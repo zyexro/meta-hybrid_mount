@@ -16,7 +16,6 @@ import { features } from "../lib/features";
 import { API } from "../lib/api";
 import Skeleton from "../components/Skeleton";
 import BottomActions from "../components/BottomActions";
-import { normalizeMountMode } from "../lib/api/core/guards";
 import type { Module, MountMode } from "../lib/types";
 import "./ModulesTab.css";
 import "@material/web/iconbutton/filled-tonal-icon-button.js";
@@ -91,27 +90,30 @@ export default function ModulesTab() {
     }
   }
 
-  const filteredModules = createMemo(() =>
-    moduleStore.modules.filter((module) => {
-      const q = deferredSearchQuery().toLowerCase();
+  const filteredModules = createMemo(() => {
+    const q = deferredSearchQuery().trim().toLowerCase();
+    const currentFilter = filterType();
+    const includeUmount = showUmount();
+
+    return moduleStore.modules.filter((module) => {
       const hasMountError = Boolean(module.mount_error);
-      if (!module.is_mounted && !showUmount() && !hasMountError) {
+      if (!module.is_mounted && !includeUmount && !hasMountError) {
         return false;
       }
-      const matchSearch =
-        module.name.toLowerCase().includes(q) ||
-        module.id.toLowerCase().includes(q);
-      if (!matchSearch) return false;
       if (
-        filterType() !== "all" &&
-        normalizeMountMode(module.mode) !== filterType()
+        q &&
+        !module.name.toLowerCase().includes(q) &&
+        !module.id.toLowerCase().includes(q)
       ) {
+        return false;
+      }
+      if (currentFilter !== "all" && module.mode !== currentFilter) {
         return false;
       }
 
       return true;
-    }),
-  );
+    });
+  });
   const [clearingErrors, setClearingErrors] = createSignal(false);
   const hasMountErrors = createMemo(() =>
     moduleStore.modules.some((m) => !!m.mount_error),
@@ -157,9 +159,9 @@ export default function ModulesTab() {
   function getModeLabel(mod: Module) {
     const modes = uiStore.L.modules?.modes;
     if (!mod.is_mounted) return modes?.umount ?? "Umount";
-    if (normalizeMountMode(mod.mode) === "magic")
-      return modes?.magic ?? "Magic";
-    if (normalizeMountMode(mod.mode) === "kasumi") {
+    const mode = mod.mode;
+    if (mode === "magic") return modes?.magic ?? "Magic";
+    if (mode === "kasumi") {
       return modes?.kasumi ?? "Kasumi";
     }
     return modes?.overlay ?? "OverlayFS";
@@ -167,13 +169,14 @@ export default function ModulesTab() {
 
   function getModeClass(mod: Module) {
     if (!mod.is_mounted) return "mode-ignore";
-    if (normalizeMountMode(mod.mode) === "magic") return "mode-magic";
-    if (normalizeMountMode(mod.mode) === "kasumi") return "mode-kasumi";
+    const mode = mod.mode;
+    if (mode === "magic") return "mode-magic";
+    if (mode === "kasumi") return "mode-kasumi";
     return "mode-overlay";
   }
 
   function getEffectiveDefaultMode(mod: Module): MountMode {
-    const mode = normalizeMountMode(mod.rules.default_mode);
+    const mode = mod.rules.default_mode;
     if (mode === "kasumi" && !kasumiAvailable()) {
       return "ignore";
     }

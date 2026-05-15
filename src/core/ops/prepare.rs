@@ -70,6 +70,11 @@ struct ProcessingItem {
     count_mount_content: bool,
 }
 
+struct EntryState {
+    direct_non_dir_entries: bool,
+    has_child_dirs: bool,
+}
+
 struct PrepareContext {
     use_kasumi: bool,
     overlay_fallback_enabled: bool,
@@ -118,6 +123,7 @@ impl PrepareContext {
         outcome: &mut ModulePrepareOutcome,
         queue: &mut VecDeque<ProcessingItem>,
         visited_dirs: &mut HashSet<(u64, u64)>,
+        descendant_rule_prefixes: &HashSet<String>,
     ) -> Result<()> {
         let metadata = fs::symlink_metadata(&item.source_dir)
             .with_context(|| format!("failed to inspect {}", item.source_dir.display()))?;
@@ -201,8 +207,11 @@ impl PrepareContext {
                 module,
                 &item,
                 &current_target,
-                direct_non_dir_entries,
-                !child_dirs.is_empty(),
+                EntryState {
+                    direct_non_dir_entries,
+                    has_child_dirs: !child_dirs.is_empty(),
+                },
+                descendant_rule_prefixes,
                 outcome,
             )
         } else {
@@ -222,8 +231,8 @@ impl PrepareContext {
         module: &Module,
         item: &ProcessingItem,
         resolved_target: &Path,
-        direct_non_dir_entries: bool,
-        has_child_dirs: bool,
+        entry_state: EntryState,
+        descendant_rule_prefixes: &HashSet<String>,
         outcome: &mut ModulePrepareOutcome,
     ) -> bool {
         let relative_key = item.relative_path.to_string_lossy();
@@ -240,18 +249,19 @@ impl PrepareContext {
             &effective_mode,
         );
 
-        let has_descendant_rules = module.rules.has_descendant_rule(&item.relative_path);
-        let has_any_entries = direct_non_dir_entries || has_child_dirs;
+        let has_descendant_rules = descendant_rule_prefixes.contains(relative_key.as_ref());
+        let has_any_entries = entry_state.direct_non_dir_entries || entry_state.has_child_dirs;
         #[cfg(feature = "control-plane")]
         let has_magic_entries = has_any_entries;
         #[cfg(not(feature = "control-plane"))]
-        let has_magic_entries = direct_non_dir_entries || (has_child_dirs && !has_descendant_rules);
+        let has_magic_entries = entry_state.direct_non_dir_entries
+            || (entry_state.has_child_dirs && !has_descendant_rules);
 
         if matches!(effective_mode, MountMode::Magic) && has_magic_entries {
             outcome.plan.magic = true;
         }
         if matches!(effective_mode, MountMode::Overlay)
-            && direct_non_dir_entries
+            && entry_state.direct_non_dir_entries
             && has_descendant_rules
             && self.overlay_fallback_enabled
         {
@@ -262,7 +272,7 @@ impl PrepareContext {
         }
 
         if matches!(effective_mode, MountMode::Overlay)
-            && direct_non_dir_entries
+            && entry_state.direct_non_dir_entries
             && has_descendant_rules
         {
             crate::scoped_log!(
@@ -514,6 +524,7 @@ fn prepare_module(
     let mut outcome = ModulePrepareOutcome::default();
     let mut queue = VecDeque::new();
     let mut visited_dirs = HashSet::new();
+    let descendant_rule_prefixes = module.rules.descendant_rule_prefixes();
 
     for entry_result in fs::read_dir(&module.source_path)
         .with_context(|| format!("failed to read {}", module.source_path.display()))?
@@ -561,7 +572,14 @@ fn prepare_module(
     }
 
     while let Some(item) = queue.pop_front() {
-        context.process_dir(module, item, &mut outcome, &mut queue, &mut visited_dirs)?;
+        context.process_dir(
+            module,
+            item,
+            &mut outcome,
+            &mut queue,
+            &mut visited_dirs,
+            &descendant_rule_prefixes,
+        )?;
     }
 
     Ok(outcome)

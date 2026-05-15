@@ -47,8 +47,11 @@ enum Arch {
 
 #[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 enum BuildFlavor {
+    /// Complete build: control plane + WebUI + Kasumi userspace + LKM assets.
     Full,
+    /// Management build: control plane + WebUI, without any Kasumi feature surface.
     Lite,
+    /// Mount-only build: no control plane, no WebUI, no Kasumi.
     Nano,
 }
 

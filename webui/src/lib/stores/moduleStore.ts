@@ -27,7 +27,7 @@ const createModuleStore = () => {
     const stats = { overlay: 0, magic: 0, kasumi: 0 };
     modules.forEach((module) => {
       if (!module.is_mounted) return;
-      const mode = normalizeMountMode(module.mode);
+      const mode = module.mode;
       if (mode === "overlay") stats.overlay++;
       else if (mode === "magic") stats.magic++;
       else if (mode === "kasumi") stats.kasumi++;
