@@ -1,4 +1,62 @@
 
+## v4.1.0
+
+
+### <!-- 1 --> Features
+
+- Update summary in module.json to include 'Kasumi'
+
+- Update version in README files to 4.0.5
+
+- 添加对浅层覆盖的支持，优化挂载计划处理
+
+
+
+### <!-- 2 --> Fixes
+
+- Scope SELinux Guard to app zygote (#27) Kasumi Fix
+
+- `umount` Skip pairip-protected lib partitions to avoid SIGSEGV KSU detaching the overlay over /system/lib*, /vendor/lib* mid-flight crashes pairip-protected APKs in libpairipcore.so. Filter those paths out of the umount queue and dedupe via HashSet::insert so repeat calls are no-ops.
+
+- Handle module markers case-insensitively
+
+- Make clippy happy
+
+- 更新文档以更准确地描述构建版本的用途和功能
+
+
+
+### <!-- 4 --> Refactors
+
+- `notify` 重构 Telegram 通知消息排版 - 文件组不再附带独立 caption，三个文件干净排列 - 文件组后独立发送文字消息，包含标题、分支、产物数、commit 和日志链接 - 移除产物大小统计行
+
+- `nano` 用 marker 机制替换 OverlayFS 白名单 - 移除 overlay_whitelist 配置项和 NANO_OVERLAY_WHITELIST 常量 - Nano 改用模块目录下的 overlay/magic marker 文件来判断挂载模式 - metainstall.sh 增加 nano 检测、mode marker 写入和分区列表扩展 - 更新 README 文档说明 marker-based 模式 - inventory 模块增加 module_mount_mode_marker 及测试
+
+- `notify` 合并文件和文字为单条消息 Media group 第一个文件附带共享 caption，其余文件无独立文字
+
+- 重构模块规则和处理逻辑，添加后代规则前缀支持
+
+
+
+### <!-- 5 --> Documentation
+
+- `readme` List supported languages
+
+- `readme` Link available readme translations
+
+- `readme` Add localized readme translations
+
+
+
+### <!-- 9 --> Other
+
+- Add Telegram notification helper for Hybrid Mount build artifacts - Introduced a new `notify` tool to send notifications via Telegram for build artifacts. - Implemented functionality to find ZIP files in the output directory and send notifications with details such as branch name, commit message, and artifact sizes. - Created a `NotifyRequest` struct to encapsulate notification parameters. - Added command-line interface to allow specifying a topic ID and event label. - Included tests for the ZIP file detection functionality.
+
+- `notify` Apply cargo fmt
+
+
+
+
 ## v4.0.5
 
 
