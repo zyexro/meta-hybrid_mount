@@ -10,7 +10,7 @@
 Hybrid Mount WebUI is a Material Design 3 frontend for **Hybrid Mount** runtime management.
 It provides a stable UI contract for configuration, module policy editing, runtime diagnostics, and operational actions in KernelSU environments.
 
-**[🇨🇳 中文文档](README.zh-CN.md)**
+**[English](README.md)** &nbsp; **[简体中文](README.zh-CN.md)**
 
 ---
 
@@ -65,7 +65,7 @@ The UI currently ships with these locales:
 - 简体中文 (`zh-CN`)
 - 繁體中文 (`zh-TW`)
 
-Project documentation is available in English and Simplified Chinese.
+README documentation is available in [English](README.md) and [Simplified Chinese](README.zh-CN.md).
 
 ## Repository Layout
 

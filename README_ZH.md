@@ -18,7 +18,7 @@ Hybrid Mount 是面向 **KernelSU** 与 **APatch** 的挂载编排元模块。
 
 发布包现在分为三个版本 — 详见 [构建版本](#构建版本) 对比。除非另有说明，下面内容默认描述的是 `full` 版本。
 
-**[🇺🇸 English](README.md)** &nbsp; **[🇯🇵 日本語](README_JP.md)**
+**[English](README.md)** &nbsp; **[简体中文](README_ZH.md)** &nbsp; **[日本語](README_JP.md)**
 
 ---
 
@@ -192,7 +192,7 @@ WebUI 目前提供以下语言：
 - 简体中文 (`zh-CN`)
 - 繁體中文 (`zh-TW`)
 
-项目文档提供英文、简体中文和日文版本。
+README 文档提供 [English](README.md)、[简体中文](README_ZH.md) 和 [日本語](README_JP.md) 版本。
 
 ### 访问方式
 

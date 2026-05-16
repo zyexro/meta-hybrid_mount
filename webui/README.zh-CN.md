@@ -10,7 +10,7 @@
 Hybrid Mount WebUI 是 **Hybrid Mount** 的 Material Design 3 前端控制台，
 面向 KernelSU 场景提供配置管理、模块策略编辑、运行诊断和运维动作入口。
 
-**[🇺🇸 English](README.md)**
+**[English](README.md)** &nbsp; **[简体中文](README.zh-CN.md)**
 
 ---
 
@@ -65,7 +65,7 @@ WebUI 目前提供以下语言：
 - 简体中文 (`zh-CN`)
 - 繁體中文 (`zh-TW`)
 
-项目文档提供英文和简体中文版本。
+README 文档提供 [English](README.md) 和 [简体中文](README.zh-CN.md) 版本。
 
 ## 仓库结构
 
