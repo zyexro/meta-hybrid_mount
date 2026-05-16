@@ -27,6 +27,7 @@ use crate::{
     core::{inventory, runtime_state::RuntimeState},
     defs,
     domain::{ModuleRules, MountMode},
+    utils,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -186,7 +187,9 @@ fn collect_mount_error_marker_modules(moduledir: &Path) -> Vec<String> {
         .flatten()
         .filter_map(|entry| {
             let path = entry.path();
-            if !path.is_dir() || !path.join(defs::MOUNT_ERROR_FILE_NAME).exists() {
+            if !path.is_dir()
+                || !utils::dir_contains_entry_case_insensitive(&path, defs::MOUNT_ERROR_FILE_NAME)
+            {
                 return None;
             }
 
@@ -202,9 +205,7 @@ fn mount_error_reason(
     module_path: &Path,
 ) -> Option<String> {
     runtime_index.mount_error_reason(module_id).or_else(|| {
-        module_path
-            .join(defs::MOUNT_ERROR_FILE_NAME)
-            .exists()
+        utils::dir_contains_entry_case_insensitive(module_path, defs::MOUNT_ERROR_FILE_NAME)
             .then(|| "mount_error marker present".to_string())
     })
 }
@@ -223,19 +224,15 @@ pub fn apply_modules_payload(
         let disable_path = module_path.join(defs::DISABLE_FILE_NAME);
 
         if module.enabled == Some(false) {
+            utils::remove_dir_entries_case_insensitive(&module_path, defs::DISABLE_FILE_NAME)?;
             fs::write(&disable_path, b"").with_context(|| {
                 format!("failed to create disable marker {}", disable_path.display())
             })?;
         } else if module.enabled == Some(true) {
-            match fs::remove_file(&disable_path) {
-                Ok(()) => {}
-                Err(err) if err.kind() == io::ErrorKind::NotFound => {}
-                Err(err) => {
-                    return Err(err).with_context(|| {
-                        format!("failed to remove disable marker {}", disable_path.display())
-                    });
-                }
-            }
+            utils::remove_dir_entries_case_insensitive(&module_path, defs::DISABLE_FILE_NAME)
+                .with_context(|| {
+                    format!("failed to remove disable marker {}", disable_path.display())
+                })?;
         }
 
         config.rules.insert(module.id.clone(), module.rules.clone());
@@ -445,7 +442,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let module_dir = temp.path().join("broken");
         fs::create_dir_all(&module_dir).unwrap();
-        fs::write(module_dir.join(defs::MOUNT_ERROR_FILE_NAME), b"").unwrap();
+        fs::write(module_dir.join("MOUNT_ERROR"), b"").unwrap();
 
         let config = Config {
             moduledir: temp.path().to_path_buf(),
@@ -465,5 +462,38 @@ mod tests {
             module.mount_error.as_deref(),
             Some("mount_error marker present")
         );
+    }
+
+    #[test]
+    fn apply_modules_payload_handles_case_insensitive_disable_marker() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("config.toml");
+        let module_dir = temp.path().join("modules").join("broken");
+        fs::create_dir_all(&module_dir).unwrap();
+        fs::write(module_dir.join("DISABLE"), b"").unwrap();
+
+        let config = Config {
+            moduledir: temp.path().join("modules"),
+            ..Default::default()
+        };
+        config.save_to_file(&config_path).unwrap();
+
+        let payload = apply_modules_payload(
+            &config_path,
+            &[ModuleApplyEntry {
+                id: "broken".to_string(),
+                enabled: Some(false),
+                source_path: Some(module_dir.clone()),
+                rules: ModuleRules::default(),
+            }],
+        )
+        .unwrap();
+
+        assert_eq!(payload.updated, 1);
+        assert!(module_dir.join(defs::DISABLE_FILE_NAME).exists());
+        assert!(crate::utils::dir_contains_entry_case_insensitive(
+            &module_dir,
+            defs::DISABLE_FILE_NAME
+        ));
     }
 }

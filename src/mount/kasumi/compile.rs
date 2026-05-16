@@ -188,10 +188,7 @@ pub(super) fn compile_rules(
                     continue;
                 }
 
-                if path
-                    .file_name()
-                    .is_some_and(|name| name == defs::REPLACE_DIR_FILE_NAME)
-                {
+                if utils::path_file_name_eq_ignore_ascii_case(path, defs::REPLACE_DIR_FILE_NAME) {
                     continue;
                 }
 

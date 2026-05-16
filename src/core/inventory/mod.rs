@@ -19,7 +19,7 @@ pub use discovery::*;
 
 #[cfg(not(feature = "control-plane"))]
 use crate::domain::MountMode;
-use crate::{conf::config::Config, defs, domain::ModuleRules};
+use crate::{conf::config::Config, defs, domain::ModuleRules, utils};
 
 pub fn load_module_rules(config: &Config, module_id: &str) -> ModuleRules {
     let mut rules = ModuleRules {
@@ -44,7 +44,7 @@ pub fn load_module_rules(config: &Config, module_id: &str) -> ModuleRules {
 pub fn module_mount_mode_marker(module_path: &std::path::Path) -> Option<MountMode> {
     [MountMode::Overlay, MountMode::Magic]
         .into_iter()
-        .find(|mode| module_path.join(mode.as_strategy()).is_file())
+        .find(|mode| utils::dir_contains_entry_case_insensitive(module_path, mode.as_strategy()))
 }
 
 pub fn is_reserved_module_dir(id: &str) -> bool {
@@ -56,16 +56,16 @@ pub fn is_reserved_module_dir(id: &str) -> bool {
 
 pub fn mount_block_markers(module_path: &std::path::Path) -> Vec<&'static str> {
     let mut markers = Vec::new();
-    if module_path.join(defs::DISABLE_FILE_NAME).exists() {
+    if utils::dir_contains_entry_case_insensitive(module_path, defs::DISABLE_FILE_NAME) {
         markers.push(defs::DISABLE_FILE_NAME);
     }
-    if module_path.join(defs::REMOVE_FILE_NAME).exists() {
+    if utils::dir_contains_entry_case_insensitive(module_path, defs::REMOVE_FILE_NAME) {
         markers.push(defs::REMOVE_FILE_NAME);
     }
-    if module_path.join(defs::MOUNT_ERROR_FILE_NAME).exists() {
+    if utils::dir_contains_entry_case_insensitive(module_path, defs::MOUNT_ERROR_FILE_NAME) {
         markers.push(defs::MOUNT_ERROR_FILE_NAME);
     }
-    if module_path.join(defs::SKIP_MOUNT_FILE_NAME).exists() {
+    if utils::dir_contains_entry_case_insensitive(module_path, defs::SKIP_MOUNT_FILE_NAME) {
         markers.push(defs::SKIP_MOUNT_FILE_NAME);
     }
     markers
@@ -92,7 +92,7 @@ mod tests {
 
         assert_eq!(module_mount_mode_marker(&module_path), None);
 
-        fs::write(module_path.join(MountMode::Magic.as_strategy()), b"").unwrap();
+        fs::write(module_path.join("MAGIC"), b"").unwrap();
         assert_eq!(
             module_mount_mode_marker(&module_path),
             Some(MountMode::Magic)
@@ -104,8 +104,8 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let module_path = temp.path().join("module");
         fs::create_dir_all(&module_path).unwrap();
-        fs::write(module_path.join(MountMode::Overlay.as_strategy()), b"").unwrap();
-        fs::write(module_path.join(MountMode::Magic.as_strategy()), b"").unwrap();
+        fs::write(module_path.join("OVERLAY"), b"").unwrap();
+        fs::write(module_path.join("MAGIC"), b"").unwrap();
 
         assert_eq!(
             module_mount_mode_marker(&module_path),
@@ -118,7 +118,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let module_path = temp.path().join("module");
         fs::create_dir_all(&module_path).unwrap();
-        fs::write(module_path.join(MountMode::Kasumi.as_strategy()), b"").unwrap();
+        fs::write(module_path.join("KASUMI"), b"").unwrap();
 
         assert_eq!(module_mount_mode_marker(&module_path), None);
     }
@@ -128,7 +128,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let module_path = temp.path().join("module");
         fs::create_dir_all(&module_path).unwrap();
-        fs::write(module_path.join(MountMode::Magic.as_strategy()), b"").unwrap();
+        fs::write(module_path.join("MaGiC"), b"").unwrap();
 
         let mut config = Config {
             moduledir: temp.path().to_path_buf(),
@@ -147,5 +147,38 @@ mod tests {
             load_module_rules(&config, "module").default_mode,
             MountMode::Magic
         );
+    }
+}
+
+#[cfg(test)]
+mod marker_case_tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::*;
+    use crate::defs;
+
+    #[test]
+    fn mount_block_markers_detect_case_insensitive_files() {
+        let temp = TempDir::new().unwrap();
+        let module_path = temp.path().join("module");
+        fs::create_dir_all(&module_path).unwrap();
+        fs::write(module_path.join("DISABLE"), b"").unwrap();
+        fs::write(module_path.join("ReMoVe"), b"").unwrap();
+        fs::write(module_path.join("MOUNT_ERROR"), b"").unwrap();
+        fs::write(module_path.join("skip_Mount"), b"").unwrap();
+
+        let markers = mount_block_markers(&module_path);
+        assert_eq!(
+            markers,
+            vec![
+                defs::DISABLE_FILE_NAME,
+                defs::REMOVE_FILE_NAME,
+                defs::MOUNT_ERROR_FILE_NAME,
+                defs::SKIP_MOUNT_FILE_NAME,
+            ]
+        );
+        assert!(has_mount_block_marker(&module_path));
     }
 }

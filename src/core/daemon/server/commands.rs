@@ -38,7 +38,7 @@ use super::{
 use crate::{
     conf::config::Config,
     core::{api, inventory, runtime_state::RuntimeState},
-    defs,
+    defs, utils,
 };
 #[cfg(feature = "kasumi")]
 use crate::{
@@ -694,14 +694,12 @@ fn clear_mount_error_markers(config: &Config) -> Result<usize> {
             continue;
         }
 
-        let marker = entry.path().join(defs::MOUNT_ERROR_FILE_NAME);
-        match fs::remove_file(&marker) {
-            Ok(()) => removed += 1,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(err) => {
-                return Err(err).with_context(|| format!("failed to remove {}", marker.display()));
-            }
-        }
+        let marker_dir = entry.path();
+        removed +=
+            utils::remove_dir_entries_case_insensitive(&marker_dir, defs::MOUNT_ERROR_FILE_NAME)
+                .with_context(|| {
+                    format!("failed to remove marker under {}", marker_dir.display())
+                })?;
     }
 
     Ok(removed)
@@ -886,7 +884,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let module_dir = temp.path().join("broken");
         fs::create_dir_all(&module_dir).unwrap();
-        let marker = module_dir.join(defs::MOUNT_ERROR_FILE_NAME);
+        let marker = module_dir.join("MOUNT_ERROR");
         fs::write(&marker, b"").unwrap();
 
         let config = Config {

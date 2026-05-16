@@ -73,6 +73,7 @@ struct ProcessingItem {
 struct EntryState {
     direct_non_dir_entries: bool,
     has_child_dirs: bool,
+    has_replace_marker: bool,
 }
 
 struct PrepareContext {
@@ -157,6 +158,7 @@ impl PrepareContext {
 
         let mut child_dirs = Vec::new();
         let mut direct_non_dir_entries = false;
+        let mut has_replace_marker = false;
 
         for entry_result in fs::read_dir(&item.source_dir)
             .with_context(|| format!("failed to read {}", item.source_dir.display()))?
@@ -164,12 +166,17 @@ impl PrepareContext {
             let entry = entry_result
                 .with_context(|| format!("failed to enumerate {}", item.source_dir.display()))?;
             let file_name = entry.file_name();
-            if file_name.as_os_str() == defs::REPLACE_DIR_FILE_NAME {
+            let source_path = entry.path();
+            if utils::path_file_name_eq_ignore_ascii_case(&source_path, defs::REPLACE_DIR_FILE_NAME)
+            {
+                has_replace_marker = true;
+                if item.count_mount_content {
+                    outcome.has_mount_content = true;
+                }
                 outcome.opaque_dirs.push(item.copy_dir.clone());
                 continue;
             }
 
-            let source_path = entry.path();
             let copy_path = item.copy_dir.join(&file_name);
             let final_path = item.final_dir.join(&file_name);
             let next_relative = item.relative_path.join(&file_name);
@@ -210,6 +217,7 @@ impl PrepareContext {
                 EntryState {
                     direct_non_dir_entries,
                     has_child_dirs: !child_dirs.is_empty(),
+                    has_replace_marker,
                 },
                 descendant_rule_prefixes,
                 outcome,
@@ -250,11 +258,14 @@ impl PrepareContext {
         );
 
         let has_descendant_rules = descendant_rule_prefixes.contains(relative_key.as_ref());
-        let has_any_entries = entry_state.direct_non_dir_entries || entry_state.has_child_dirs;
+        let has_any_entries = entry_state.direct_non_dir_entries
+            || entry_state.has_child_dirs
+            || entry_state.has_replace_marker;
         #[cfg(feature = "control-plane")]
         let has_magic_entries = has_any_entries;
         #[cfg(not(feature = "control-plane"))]
         let has_magic_entries = entry_state.direct_non_dir_entries
+            || entry_state.has_replace_marker
             || (entry_state.has_child_dirs && !has_descendant_rules);
 
         if matches!(effective_mode, MountMode::Magic) && has_magic_entries {
@@ -532,7 +543,7 @@ fn prepare_module(
         let entry = entry_result
             .with_context(|| format!("failed to enumerate {}", module.source_path.display()))?;
         let file_name = entry.file_name();
-        if file_name.as_os_str() == defs::REPLACE_DIR_FILE_NAME {
+        if utils::path_file_name_eq_ignore_ascii_case(&entry.path(), defs::REPLACE_DIR_FILE_NAME) {
             outcome.opaque_dirs.push(tmp_dst.to_path_buf());
             continue;
         }
@@ -849,7 +860,7 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let source = temp.path().join("module");
         fs::create_dir_all(source.join("system")).unwrap();
-        write_file(&source.join("system/.replace"), "");
+        write_file(&source.join("system/.REPLACE"), "");
         write_file(&source.join("system/bin/sh"), "shell");
 
         let system_root = temp.path().join("sysroot");
@@ -867,7 +878,62 @@ mod tests {
         );
 
         assert!(!plan.overlay_ops.is_empty());
-        assert!(!storage.join("foo/system/.replace").exists());
+        assert!(!storage.join("foo/system/.REPLACE").exists());
         assert!(storage.join("foo/system/bin/sh").exists());
+    }
+
+    #[test]
+    fn prepare_mount_plan_keeps_replace_only_overlay_dir() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join("module");
+        write_file(&source.join("system/app/.RePlAcE"), "");
+
+        let system_root = temp.path().join("sysroot");
+        fs::create_dir_all(system_root.join("system/app")).unwrap();
+
+        let storage = temp.path().join("storage");
+        let module = make_module("foo", &source, MountMode::Overlay, &[]);
+
+        let plan = prepare_with_root(
+            &test_config(),
+            &[module],
+            &storage,
+            &system_root,
+            &BackendCapabilities::default(),
+        );
+
+        assert_eq!(plan.overlay_ops.len(), 1);
+        assert_eq!(
+            plan.overlay_ops[0].target,
+            system_root.join("system/app").display().to_string()
+        );
+        assert!(storage.join("foo/system/app").is_dir());
+        assert!(!storage.join("foo/system/app/.RePlAcE").exists());
+    }
+
+    #[test]
+    fn prepare_mount_plan_marks_magic_for_replace_only_dir() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join("module");
+        write_file(&source.join("system/.rEpLaCe"), "");
+
+        let system_root = temp.path().join("sysroot");
+        fs::create_dir_all(system_root.join("system")).unwrap();
+
+        let storage = temp.path().join("storage");
+        let module = make_module("foo", &source, MountMode::Magic, &[]);
+
+        let plan = prepare_with_root(
+            &test_config(),
+            &[module],
+            &storage,
+            &system_root,
+            &BackendCapabilities::default(),
+        );
+
+        assert!(plan.overlay_ops.is_empty());
+        assert_eq!(plan.magic_module_ids, vec!["foo".to_string()]);
+        assert!(storage.join("foo/system").is_dir());
+        assert!(!storage.join("foo/system/.rEpLaCe").exists());
     }
 }

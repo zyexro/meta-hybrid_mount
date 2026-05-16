@@ -27,7 +27,7 @@ use crate::mount::kasumi;
 #[cfg(feature = "control-plane")]
 use crate::sys::fs::xattr;
 use crate::{
-    conf::config::Config, core::ops::executor::ExecutionResult, defs, sys::fs::atomic_write,
+    conf::config::Config, core::ops::executor::ExecutionResult, defs, sys::fs::atomic_write, utils,
 };
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -504,7 +504,7 @@ fn collect_skip_mount_modules(config: &Config) -> Vec<String> {
         if crate::core::inventory::is_reserved_module_dir(&id) {
             continue;
         }
-        if module_dir.join(defs::SKIP_MOUNT_FILE_NAME).exists() {
+        if utils::dir_contains_entry_case_insensitive(&module_dir, defs::SKIP_MOUNT_FILE_NAME) {
             modules.push(id);
         }
     }

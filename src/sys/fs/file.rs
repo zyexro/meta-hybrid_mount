@@ -28,10 +28,10 @@ use rustix::fs::ioctl_ficlone;
 use rustix::fs::{CWD, FileType, Gid, Mode, Uid, chown, mknodat};
 use walkdir::WalkDir;
 
-#[cfg(feature = "kasumi")]
-use crate::defs;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::sys::fs::{lgetfilecon, lsetfilecon};
+#[cfg(feature = "kasumi")]
+use crate::{defs, utils};
 
 #[derive(Debug, Default)]
 #[cfg(feature = "kasumi")]
@@ -271,7 +271,7 @@ pub fn copy_non_dir_entry(
 }
 
 pub fn finalize_copied_tree(id: &str, root: &Path, opaque_dirs: &[PathBuf]) {
-    if let Err(err) = prune_empty_dirs(root) {
+    if let Err(err) = prune_empty_dirs_preserving(root, opaque_dirs) {
         crate::scoped_log!(
             warn,
             "fs:copy",
@@ -441,7 +441,10 @@ fn native_cp_r(
         let entry = entry?;
         let src_path = entry.path();
         let file_name = entry.file_name();
-        if file_name.as_os_str() == defs::REPLACE_DIR_FILE_NAME {
+        if utils::path_file_name_eq_ignore_ascii_case(&src_path, defs::REPLACE_DIR_FILE_NAME) {
+            if is_managed_partition_path(relative, managed_partitions) {
+                stats.has_mount_content = true;
+            }
             stats.opaque_dirs.push(dst.to_path_buf());
             continue;
         }
@@ -503,10 +506,15 @@ pub fn sync_dir(src: &Path, dst: &Path, managed_partitions: &[String]) -> Result
 }
 
 pub fn prune_empty_dirs<P: AsRef<Path>>(root: P) -> Result<()> {
-    let root = root.as_ref();
+    prune_empty_dirs_preserving(root.as_ref(), &[])
+}
+
+fn prune_empty_dirs_preserving(root: &Path, preserved_dirs: &[PathBuf]) -> Result<()> {
     if !root.exists() {
         return Ok(());
     }
+
+    let preserved_dirs: HashSet<PathBuf> = preserved_dirs.iter().cloned().collect();
 
     for entry in WalkDir::new(root)
         .min_depth(1)
@@ -516,6 +524,9 @@ pub fn prune_empty_dirs<P: AsRef<Path>>(root: P) -> Result<()> {
     {
         if entry.file_type().is_dir() {
             let path = entry.path();
+            if preserved_dirs.contains(path) {
+                continue;
+            }
             if fs::remove_dir(path).is_ok() {}
         }
     }
