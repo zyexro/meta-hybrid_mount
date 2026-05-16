@@ -39,6 +39,8 @@ use crate::{
     utils,
 };
 
+const SHALLOW_OVERLAY_DIR: &str = ".hybrid_overlay";
+
 #[derive(Debug, Default)]
 struct ModulePlanOutcome {
     overlay_groups: BTreeMap<PathBuf, (String, Vec<PathBuf>)>,
@@ -63,6 +65,8 @@ struct ProcessingItem {
     source_dir: PathBuf,
     copy_dir: PathBuf,
     final_dir: PathBuf,
+    shallow_copy_dir: PathBuf,
+    shallow_final_dir: PathBuf,
     system_target: PathBuf,
     relative_path: PathBuf,
     partition_label: String,
@@ -76,22 +80,22 @@ struct EntryState {
     has_replace_marker: bool,
 }
 
+struct ModeDecision {
+    requested_mode: MountMode,
+    effective_mode: MountMode,
+    has_descendant_rules: bool,
+}
+
 struct PrepareContext {
     use_kasumi: bool,
-    overlay_fallback_enabled: bool,
     managed_partitions: HashSet<String>,
     target_cache: HashMap<PathBuf, PathBuf>,
 }
 
 impl PrepareContext {
-    fn new(
-        config: &config::Config,
-        capabilities: &BackendCapabilities,
-        managed_partitions: HashSet<String>,
-    ) -> Self {
+    fn new(capabilities: &BackendCapabilities, managed_partitions: HashSet<String>) -> Self {
         Self {
             use_kasumi: capabilities.can_use_kasumi(),
-            overlay_fallback_enabled: config.enable_overlay_fallback,
             managed_partitions,
             target_cache: HashMap::new(),
         }
@@ -136,6 +140,21 @@ impl PrepareContext {
         }
 
         ensure_dir_like(&item.source_dir, &item.copy_dir)?;
+        let relative_key = item.relative_path.to_string_lossy();
+        let requested_mode = module.rules.get_mode(relative_key.as_ref());
+        let effective_mode = if matches!(requested_mode, MountMode::Kasumi) && !self.use_kasumi {
+            MountMode::Ignore
+        } else {
+            requested_mode
+        };
+        let mode_decision = ModeDecision {
+            requested_mode,
+            effective_mode,
+            has_descendant_rules: descendant_rule_prefixes.contains(relative_key.as_ref()),
+        };
+        let needs_shallow_overlay = matches!(mode_decision.effective_mode, MountMode::Overlay)
+            && mode_decision.has_descendant_rules;
+        drop(relative_key);
 
         let current_target = if item.plan_active {
             if item.system_target.exists() {
@@ -174,11 +193,17 @@ impl PrepareContext {
                     outcome.has_mount_content = true;
                 }
                 outcome.opaque_dirs.push(item.copy_dir.clone());
+                if needs_shallow_overlay {
+                    ensure_dir_like(&item.source_dir, &item.shallow_copy_dir)?;
+                    outcome.opaque_dirs.push(item.shallow_copy_dir.clone());
+                }
                 continue;
             }
 
             let copy_path = item.copy_dir.join(&file_name);
             let final_path = item.final_dir.join(&file_name);
+            let shallow_copy_path = item.shallow_copy_dir.join(&file_name);
+            let shallow_final_path = item.shallow_final_dir.join(&file_name);
             let next_relative = item.relative_path.join(&file_name);
 
             let file_type = entry
@@ -194,6 +219,8 @@ impl PrepareContext {
                     source_dir: source_path,
                     copy_dir: copy_path,
                     final_dir: final_path,
+                    shallow_copy_dir: shallow_copy_path,
+                    shallow_final_dir: shallow_final_path,
                     system_target: current_target.join(&file_name),
                     relative_path: next_relative,
                     partition_label: next_partition_label.clone(),
@@ -206,6 +233,10 @@ impl PrepareContext {
                     outcome.has_mount_content = true;
                 }
                 copy_non_dir_entry(&source_path, &copy_path, &metadata, &file_type)?;
+                if needs_shallow_overlay {
+                    ensure_dir_like(&item.source_dir, &item.shallow_copy_dir)?;
+                    copy_non_dir_entry(&source_path, &shallow_copy_path, &metadata, &file_type)?;
+                }
             }
         }
 
@@ -214,12 +245,12 @@ impl PrepareContext {
                 module,
                 &item,
                 &current_target,
+                mode_decision,
                 EntryState {
                     direct_non_dir_entries,
                     has_child_dirs: !child_dirs.is_empty(),
                     has_replace_marker,
                 },
-                descendant_rule_prefixes,
                 outcome,
             )
         } else {
@@ -239,25 +270,17 @@ impl PrepareContext {
         module: &Module,
         item: &ProcessingItem,
         resolved_target: &Path,
+        mode_decision: ModeDecision,
         entry_state: EntryState,
-        descendant_rule_prefixes: &HashSet<String>,
         outcome: &mut ModulePrepareOutcome,
     ) -> bool {
-        let relative_key = item.relative_path.to_string_lossy();
-        let requested_mode = module.rules.get_mode(relative_key.as_ref());
-        let effective_mode = if matches!(requested_mode, MountMode::Kasumi) && !self.use_kasumi {
-            MountMode::Ignore
-        } else {
-            requested_mode
-        };
         log_mode_decision(
             module,
             &item.relative_path,
-            &requested_mode,
-            &effective_mode,
+            &mode_decision.requested_mode,
+            &mode_decision.effective_mode,
         );
 
-        let has_descendant_rules = descendant_rule_prefixes.contains(relative_key.as_ref());
         let has_any_entries = entry_state.direct_non_dir_entries
             || entry_state.has_child_dirs
             || entry_state.has_replace_marker;
@@ -266,45 +289,50 @@ impl PrepareContext {
         #[cfg(not(feature = "control-plane"))]
         let has_magic_entries = entry_state.direct_non_dir_entries
             || entry_state.has_replace_marker
-            || (entry_state.has_child_dirs && !has_descendant_rules);
+            || (entry_state.has_child_dirs && !mode_decision.has_descendant_rules);
 
-        if matches!(effective_mode, MountMode::Magic) && has_magic_entries {
+        if matches!(mode_decision.effective_mode, MountMode::Magic) && has_magic_entries {
             outcome.plan.magic = true;
         }
-        if matches!(effective_mode, MountMode::Overlay)
-            && entry_state.direct_non_dir_entries
-            && has_descendant_rules
-            && self.overlay_fallback_enabled
-        {
-            outcome.plan.magic = true;
-        }
-        if matches!(effective_mode, MountMode::Kasumi) && has_any_entries {
+        if matches!(mode_decision.effective_mode, MountMode::Kasumi) && has_any_entries {
             outcome.plan.kasumi = true;
         }
 
-        if matches!(effective_mode, MountMode::Overlay)
-            && entry_state.direct_non_dir_entries
-            && has_descendant_rules
-        {
+        let needs_shallow_overlay = matches!(mode_decision.effective_mode, MountMode::Overlay)
+            && mode_decision.has_descendant_rules
+            && (entry_state.direct_non_dir_entries || entry_state.has_replace_marker);
+        if needs_shallow_overlay {
             crate::scoped_log!(
-                warn,
+                debug,
                 "prepare",
-                "mixed overlay subtree requires split: module={}, relative={}, behavior={}",
+                "mixed overlay subtree split: module={}, relative={}, behavior=shallow_overlay",
                 module.id,
-                item.relative_path.display(),
-                if self.overlay_fallback_enabled {
-                    "direct_files_magic_fallback"
-                } else {
-                    "direct_files_unhandled_overlay_fallback_disabled"
-                }
+                item.relative_path.display()
             );
+
+            if item.system_target.exists() {
+                queue_overlay(
+                    &mut outcome.plan,
+                    resolved_target.to_path_buf(),
+                    &item.partition_label,
+                    item.shallow_final_dir.clone(),
+                );
+            } else {
+                crate::scoped_log!(
+                    debug,
+                    "prepare",
+                    "target skip: module={}, reason=missing_target, path={}",
+                    module.id,
+                    item.system_target.display()
+                );
+            }
         }
 
-        if has_descendant_rules {
+        if mode_decision.has_descendant_rules {
             return true;
         }
 
-        match effective_mode {
+        match mode_decision.effective_mode {
             MountMode::Magic | MountMode::Ignore | MountMode::Kasumi => false,
             MountMode::Overlay => {
                 if !item.system_target.exists() {
@@ -398,7 +426,7 @@ fn prepare_mount_plan_with_root(
         .map(|(idx, module)| (module.id.as_str(), idx))
         .collect();
     let managed_set = managed_partitions.into_iter().collect::<HashSet<_>>();
-    let mut context = PrepareContext::new(config, capabilities, managed_set);
+    let mut context = PrepareContext::new(capabilities, managed_set);
     let mut overlay_groups: BTreeMap<PathBuf, (String, Vec<PathBuf>)> = BTreeMap::new();
     let mut magic_ids = HashSet::new();
     let mut kasumi_ids = HashSet::new();
@@ -568,6 +596,12 @@ fn prepare_module(
                 source_dir: source_path,
                 copy_dir: copy_path,
                 final_dir: final_path,
+                shallow_copy_dir: tmp_dst
+                    .join(SHALLOW_OVERLAY_DIR)
+                    .join(PathBuf::from(&file_name)),
+                shallow_final_dir: final_dst
+                    .join(SHALLOW_OVERLAY_DIR)
+                    .join(PathBuf::from(&file_name)),
                 system_target: system_root.join(&file_name),
                 relative_path,
                 partition_label: file_name.to_string_lossy().into_owned(),
@@ -853,6 +887,92 @@ mod tests {
         assert!(plan.magic_module_ids.is_empty());
         assert!(plan.kasumi_module_ids.is_empty());
         assert!(!storage.join("foo").exists());
+    }
+
+    #[test]
+    fn prepare_mount_plan_preserves_overlay_direct_files_when_subtree_is_split() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join("module");
+        write_file(&source.join("module.prop"), "id=foo");
+        write_file(&source.join("system/etc/permissions.xml"), "permissions");
+        write_file(&source.join("system/etc/init/ignored.rc"), "ignored");
+
+        let system_root = temp.path().join("sysroot");
+        fs::create_dir_all(system_root.join("system/etc/init")).unwrap();
+
+        let storage = temp.path().join("storage");
+        let module = make_module(
+            "foo",
+            &source,
+            MountMode::Overlay,
+            &[("system/etc/init", MountMode::Ignore)],
+        );
+
+        let plan = prepare_with_root(
+            &test_config(),
+            &[module],
+            &storage,
+            &system_root,
+            &BackendCapabilities::default(),
+        );
+
+        let shallow_etc = storage
+            .join("foo")
+            .join(SHALLOW_OVERLAY_DIR)
+            .join("system/etc");
+        assert_eq!(plan.overlay_ops.len(), 1);
+        assert_eq!(plan.overlay_module_ids, vec!["foo".to_string()]);
+        assert!(plan.magic_module_ids.is_empty());
+        assert_eq!(
+            plan.overlay_ops[0].target,
+            system_root.join("system/etc").display().to_string()
+        );
+        assert_eq!(plan.overlay_ops[0].lowerdirs, vec![shallow_etc.clone()]);
+        assert!(storage.join("foo/system/etc/permissions.xml").exists());
+        assert!(shallow_etc.join("permissions.xml").exists());
+        assert!(!shallow_etc.join("init").exists());
+    }
+
+    #[test]
+    fn prepare_mount_plan_preserves_overlay_replace_marker_when_subtree_is_split() {
+        let temp = TempDir::new().unwrap();
+        let source = temp.path().join("module");
+        write_file(&source.join("module.prop"), "id=foo");
+        write_file(&source.join("system/etc/.REPLACE"), "");
+        write_file(&source.join("system/etc/init/ignored.rc"), "ignored");
+
+        let system_root = temp.path().join("sysroot");
+        fs::create_dir_all(system_root.join("system/etc/init")).unwrap();
+
+        let storage = temp.path().join("storage");
+        let module = make_module(
+            "foo",
+            &source,
+            MountMode::Overlay,
+            &[("system/etc/init", MountMode::Ignore)],
+        );
+
+        let plan = prepare_with_root(
+            &test_config(),
+            &[module],
+            &storage,
+            &system_root,
+            &BackendCapabilities::default(),
+        );
+
+        let shallow_etc = storage
+            .join("foo")
+            .join(SHALLOW_OVERLAY_DIR)
+            .join("system/etc");
+        assert_eq!(plan.overlay_ops.len(), 1);
+        assert_eq!(
+            plan.overlay_ops[0].target,
+            system_root.join("system/etc").display().to_string()
+        );
+        assert_eq!(plan.overlay_ops[0].lowerdirs, vec![shallow_etc.clone()]);
+        assert!(shallow_etc.is_dir());
+        assert!(!shallow_etc.join(".REPLACE").exists());
+        assert!(!shallow_etc.join("init").exists());
     }
 
     #[test]
