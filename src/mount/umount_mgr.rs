@@ -142,6 +142,8 @@ mod tests {
     fn does_not_skip_unrelated_paths() {
         assert!(!is_ignored_partition("/product"));
         assert!(!is_ignored_partition("/system/etc"));
-        assert!(!is_ignored_partition("/data/adb/hybrid-mount/run/staging_x"));
+        assert!(!is_ignored_partition(
+            "/data/adb/hybrid-mount/run/staging_x"
+        ));
     }
 }
