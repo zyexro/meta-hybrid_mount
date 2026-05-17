@@ -254,10 +254,10 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
             #[cfg(not(feature = "kasumi"))]
             {
                 if let Some(kasumi_val) = config_value.get_mut("kasumi")
-                && let Some(enabled) = kasumi_val.get_mut("enabled")
-            {
-                *enabled = json!(false);
-            }
+                    && let Some(enabled) = kasumi_val.get_mut("enabled")
+                {
+                    *enabled = json!(false);
+                }
             }
             let version_value = to_value(&api::build_version_payload())?;
             let system_info_value = to_value(&api::build_system_info_payload(&snapshot))?;
