@@ -17,7 +17,7 @@ const createFeatures = () => {
     },
     setKasumiStatus(enabled: boolean, available: boolean) {
       if (!ENABLE_KASUMI) return;
-      setKasumiEnabled(enabled);
+      setKasumiEnabled(enabled && available);
       setKasumiAvailable(available);
     },
   };

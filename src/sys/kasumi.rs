@@ -477,6 +477,52 @@ fn module_loaded() -> bool {
     })
 }
 
+/// Returns `true` when the running kernel is below the minimum version required
+/// by Kasumi (5.10). Kernels before 5.10 lack necessary LSM/eBPF/io_uring
+/// infrastructure and are not supported by any prebuilt Kasumi LKM.
+fn kernel_below_minimum() -> bool {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        let uts = unsafe {
+            let mut uts = std::mem::MaybeUninit::<libc::utsname>::uninit();
+            if libc::uname(uts.as_mut_ptr()) != 0 {
+                // Can't determine version – assume unsupported.
+                return true;
+            }
+            uts.assume_init()
+        };
+        let release = unsafe { std::ffi::CStr::from_ptr(uts.release.as_ptr()) }
+            .to_string_lossy()
+            .into_owned();
+
+        let first_dot = match release.find('.') {
+            Some(p) => p,
+            None => return true,
+        };
+        let major: u32 = match release[..first_dot].parse() {
+            Ok(v) => v,
+            Err(_) => return true,
+        };
+        let rest = &release[first_dot + 1..];
+        let second_dot = match rest.find(|c: char| !c.is_ascii_digit()) {
+            Some(p) => p,
+            None => rest.len(),
+        };
+        let minor: u32 = match rest[..second_dot].parse() {
+            Ok(v) => v,
+            Err(_) => return true,
+        };
+
+        major < 5 || (major == 5 && minor < 10)
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        // Non-Linux hosts (macOS dev, etc.) — don't gate.
+        false
+    }
+}
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn fetch_anon_fd() -> Result<c_int> {
     {
@@ -703,7 +749,14 @@ pub fn check_status() -> KasumiStatus {
         return cache.status;
     }
 
-    let status = if !module_loaded() {
+    let status = if kernel_below_minimum() {
+        crate::scoped_log!(
+            debug,
+            "kasumi:status",
+            "kernel below 5.10 minimum — forcing KernelTooOld"
+        );
+        KasumiStatus::KernelTooOld
+    } else if !module_loaded() {
         KasumiStatus::NotPresent
     } else {
         match get_protocol_version() {

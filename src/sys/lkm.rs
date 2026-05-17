@@ -546,7 +546,12 @@ pub fn unload(config: &KasumiConfig) -> Result<()> {
 }
 
 pub fn autoload_if_needed(config: &KasumiConfig) -> Result<bool> {
-    if !config.enabled || !config.lkm_autoload || is_loaded() || !has_module_assets(config) {
+    if !config.enabled
+        || !config.lkm_autoload
+        || is_loaded()
+        || !has_module_assets(config)
+        || kasumi::check_status() == kasumi::KasumiStatus::KernelTooOld
+    {
         return Ok(false);
     }
 
