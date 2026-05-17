@@ -535,6 +535,12 @@ fn fetch_anon_fd() -> Result<c_int> {
 
     crate::scoped_log!(debug, "kasumi:fd", "start: source=kernel_query");
 
+    // Bail immediately when Kasumi isn't available — avoids a ~4.6 s
+    // retry loop that can never succeed on unsupported kernels.
+    if check_status() != KasumiStatus::Available {
+        bail!("Kasumi is not available");
+    }
+
     let mut fd = -1;
     const WAIT_ATTEMPTS: usize = 4;
     const SHORT_RETRIES: usize = 2;
