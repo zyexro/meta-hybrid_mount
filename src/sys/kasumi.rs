@@ -535,10 +535,12 @@ fn fetch_anon_fd() -> Result<c_int> {
 
     crate::scoped_log!(debug, "kasumi:fd", "start: source=kernel_query");
 
-    // Bail immediately when Kasumi isn't available — avoids a ~4.6 s
+    // Bail immediately when Kasumi LKM isn't loaded — avoids a ~4.6 s
     // retry loop that can never succeed on unsupported kernels.
-    if check_status() != KasumiStatus::Available {
-        bail!("Kasumi is not available");
+    // Use module_loaded() instead of check_status() to avoid recursion:
+    // check_status() → get_protocol_version() → ioctl_call() → fetch_anon_fd() → check_status()
+    if !module_loaded() {
+        bail!("Kasumi LKM is not loaded");
     }
 
     let mut fd = -1;
