@@ -62,11 +62,11 @@ jobs:
     uses: ./.github/workflows/build-kasumi-lkm.yml
     secrets: inherit
 
-  build:
+  build-webui:
     needs: build-kasumi-lkm
-    name: Build packages (full + lite + nano)
+    name: Build WebUI
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 15
     container:
       image: ghcr.io/hybrid-mount/meta-hybrid_mount-ci:latest
       credentials:
@@ -81,6 +81,76 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          filter: 'tree:0'
+
+      - name: Trust checkout directory
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        run: |
+          set -euo pipefail
+          STORE_PATH="$(pnpm store path --silent)"
+          mkdir -p "$STORE_PATH"
+          echo "path=$STORE_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-
+
+      - name: Build WebUI
+        working-directory: webui
+        run: |
+          set -euo pipefail
+          cat <<'EOF' > src/lib/constants_gen.ts
+          export const APP_VERSION = "dev";
+          export const IS_RELEASE = false;
+          export const ENABLE_KASUMI = true;
+          export const RUST_PATHS = {
+            CONFIG: "/data/adb/hybrid-mount/config.toml",
+            DAEMON_STATE: "/data/adb/hybrid-mount/run/daemon_state.json",
+            BINARY: "/data/adb/modules/hybrid_mount/hybrid-mount",
+          } as const;
+          EOF
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Upload WebUI artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: webui-dist
+          path: module/webroot
+          compression-level: 0
+          if-no-files-found: error
+
+  build:
+    needs: [build-kasumi-lkm, build-webui]
+    name: Build ${{ matrix.flavor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [full, lite, nano]
+    container:
+      image: ghcr.io/hybrid-mount/meta-hybrid_mount-ci:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          filter: 'tree:0'
 
       - name: Trust checkout directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
@@ -110,90 +180,47 @@ jobs:
           cp "${UAPI_FILES[0]}" src/sys/kasumi_uapi.h
           sha256sum src/sys/kasumi_uapi.h
 
+      - name: Download WebUI artifact
+        if: matrix.flavor != 'nano'
+        uses: actions/download-artifact@v8
+        with:
+          name: webui-dist
+          path: module/webroot
+
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
 
-      - name: Resolve pnpm store path
-        id: pnpm-store
-        run: |
-          set -euo pipefail
-          STORE_PATH="$(pnpm store path --silent)"
-          mkdir -p "$STORE_PATH"
-          echo "path=$STORE_PATH" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-${{ runner.os }}-
-
-      - name: Build Full
+      - name: Build ${{ matrix.flavor }}
         env:
           HYBRID_MOUNT_NOTIFY: "0"
           HYBRID_MOUNT_KASUMI_LKM_DIR: ${{ github.workspace }}/kasumi_lkm_artifacts
         run: |
           set -euo pipefail
-          ls -la "$HYBRID_MOUNT_KASUMI_LKM_DIR"
+          ls -la "$HYBRID_MOUNT_KASUMI_LKM_DIR" || true
           rm -rf output
-          cargo xtask build --ci --flavor full
+
+          skip_flag=""
+          if [ "${{ matrix.flavor }}" != "nano" ]; then
+            skip_flag="--skip-webui"
+          fi
+
+          cargo xtask build --ci --flavor ${{ matrix.flavor }} $skip_flag
+
           ZIP_PATH="$(find output -maxdepth 1 -type f -name '*.zip' | sort | head -n 1)"
           test -n "$ZIP_PATH"
           ZIP_FILENAME="$(basename "$ZIP_PATH")"
-          FULL_ARTIFACT="${ZIP_FILENAME%.*}"
-          echo "FULL_ZIP=$ZIP_PATH" >> "$GITHUB_ENV"
-          echo "FULL_ARTIFACT=$FULL_ARTIFACT" >> "$GITHUB_ENV"
+          ARTIFACT_NAME="${ZIP_FILENAME%.*}"
+          echo "ARTIFACT_ZIP=$ZIP_PATH" >> "$GITHUB_ENV"
+          echo "ARTIFACT_NAME=$ARTIFACT_NAME" >> "$GITHUB_ENV"
 
-      - name: Upload Full Artifact
+      - name: Upload ${{ matrix.flavor }} Artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.FULL_ARTIFACT }}
-          path: ${{ env.FULL_ZIP }}
-          if-no-files-found: error
-
-      - name: Build Lite
-        env:
-          HYBRID_MOUNT_NOTIFY: "0"
-        run: |
-          set -euo pipefail
-          rm -rf output
-          cargo xtask build --ci --flavor lite
-          ZIP_PATH="$(find output -maxdepth 1 -type f -name '*.zip' | sort | head -n 1)"
-          test -n "$ZIP_PATH"
-          ZIP_FILENAME="$(basename "$ZIP_PATH")"
-          LITE_ARTIFACT="${ZIP_FILENAME%.*}"
-          echo "LITE_ZIP=$ZIP_PATH" >> "$GITHUB_ENV"
-          echo "LITE_ARTIFACT=$LITE_ARTIFACT" >> "$GITHUB_ENV"
-
-      - name: Upload Lite Artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.LITE_ARTIFACT }}
-          path: ${{ env.LITE_ZIP }}
-          if-no-files-found: error
-
-      - name: Build Nano
-        env:
-          HYBRID_MOUNT_NOTIFY: "0"
-        run: |
-          set -euo pipefail
-          rm -rf output
-          cargo xtask build --ci --flavor nano
-          ZIP_PATH="$(find output -maxdepth 1 -type f -name '*.zip' | sort | head -n 1)"
-          test -n "$ZIP_PATH"
-          ZIP_FILENAME="$(basename "$ZIP_PATH")"
-          NANO_ARTIFACT="${ZIP_FILENAME%.*}"
-          echo "NANO_ZIP=$ZIP_PATH" >> "$GITHUB_ENV"
-          echo "NANO_ARTIFACT=$NANO_ARTIFACT" >> "$GITHUB_ENV"
-
-      - name: Upload Nano Artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.NANO_ARTIFACT }}
-          path: ${{ env.NANO_ZIP }}
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_ZIP }}
+          compression-level: 0
           if-no-files-found: error
 
   notify:
@@ -202,11 +229,6 @@ jobs:
     name: Notify packages
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    container:
-      image: ghcr.io/hybrid-mount/meta-hybrid_mount-ci:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         shell: bash
@@ -216,9 +238,18 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          filter: 'tree:0'
 
       - name: Trust checkout directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@nightly
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
 
       - name: Download package artifacts
         uses: actions/download-artifact@v8

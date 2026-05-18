@@ -43,6 +43,8 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v6
+        with:
+          filter: 'tree:0'
       - name: Trust checkout directory
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Cache Rust dependencies
@@ -69,6 +71,8 @@ jobs:
         working-directory: webui
     steps:
       - uses: actions/checkout@v6
+        with:
+          filter: 'tree:0'
       - name: Resolve pnpm store path
         id: pnpm-store
         shell: bash
