@@ -5,7 +5,7 @@
 ![Language](https://img.shields.io/badge/Language-Rust-orange?style=flat-square&logo=rust)
 ![Platform](https://img.shields.io/badge/Platform-Android-green?style=flat-square&logo=android)
 ![License](https://img.shields.io/badge/License-Apache--2.0-blue?style=flat-square)
-![Version](https://img.shields.io/badge/Version-4.0.5-8A2BE2?style=flat-square)
+![Version](https://img.shields.io/github/v/tag/Hybrid-Mount/meta-hybrid_mount?label=Version&color=8A2BE2&style=flat-square)
 
 Hybrid Mount là metamodule điều phối mount cho **KernelSU** và **APatch**.
 Nó hợp nhất tệp của module vào các phân vùng Android thông qua một engine chính sách thống nhất với ba backend mount:
