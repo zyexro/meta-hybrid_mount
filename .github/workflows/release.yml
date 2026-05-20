@@ -244,9 +244,9 @@ jobs:
         id: paths
         run: |
           set -euo pipefail
-          FULL_ZIP="$(find packages -maxdepth 1 -type f -name '*.zip' ! -name '*-Lite-*' ! -name '*-Nano-*' | sort | head -n 1)"
-          LITE_ZIP="$(find packages -maxdepth 1 -type f -name '*-Lite-*' | sort | head -n 1)"
-          NANO_ZIP="$(find packages -maxdepth 1 -type f -name '*-Nano-*' | sort | head -n 1)"
+          FULL_ZIP="$(find packages -maxdepth 1 -type f -name '*.zip' ! -name '*lite*' ! -name '*nano*' | sort | head -n 1)"
+          LITE_ZIP="$(find packages -maxdepth 1 -type f -name '*lite*' | sort | head -n 1)"
+          NANO_ZIP="$(find packages -maxdepth 1 -type f -name '*nano*' | sort | head -n 1)"
           test -n "$FULL_ZIP" && test -s "$FULL_ZIP"
           test -n "$LITE_ZIP" && test -s "$LITE_ZIP"
           test -n "$NANO_ZIP" && test -s "$NANO_ZIP"
