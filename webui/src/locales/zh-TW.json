@@ -65,7 +65,8 @@
     "mode_ext4": "Ext4",
     "mode_ext4Desc": "Loopback 映像。可持久保存，節省 RAM。",
     "enableOverlayFallback": "允許 Overlay 回退",
-    "daemonStartupMode": "持久化守護行程"
+    "daemonStartupMode": "持久化守護行程",
+    "kasumiConfigSaved": "Kasumi config saved. Runtime was not changed."
   },
   "modules": {
     "reload": "重新整理",
@@ -186,7 +187,25 @@
     "cmdlineValue": "Cmdline 值",
     "rulesVisibleSummary": "目前有 {count} 條可由 userspace 看到的啟用規則",
     "dtypeLabel": "dtype",
-    "loadError": "載入 Kasumi 狀態失敗"
+    "loadError": "載入 Kasumi 狀態失敗",
+    "statusConfigOffRuntimeOn": "Config Off / Runtime Still Loaded",
+    "unloadLkmWarningTitle": "注意！",
+    "unloadLkmWarningBody": "Kasumi 使用 TSR 模式时可能无法卸载，如 5 秒内未成功卸载，Kasumi 将会在 3 秒后自动安全重启，你确定要卸载吗？",
+    "unloadLkmWarningCancel": "取消",
+    "unloadLkmWarningConfirm": "确定",
+    "unameSpoofTitle": "Kernel version spoofing",
+    "unameEmptyHint": "No spoofed uname configured.",
+    "saveUname": "Save Uname",
+    "restoreUnameGlobal": "Restore original (global)",
+    "saveCmdline": "Save Cmdline",
+    "configOnlyHint": "Most settings below only update config. Runtime changes take effect the next time Kasumi is rebuilt or remounted.",
+    "unameMode": "Uname Mode",
+    "unameModeScoped": "Scoped",
+    "unameModeGlobal": "Global",
+    "unameModeScopedDesc": "Per-process: only Kasumi-hidden UIDs see fake values.",
+    "unameModeGlobalDesc": "System-wide: rewrites init_uts_ns, every task sees fake values.",
+    "unameReleaseDesc": "Kernel release, for example 5.15.0-generic.",
+    "unameVersionDesc": "Kernel version/build timestamp."
   },
   "logs": {
     "refresh": "重新整理"
