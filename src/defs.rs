@@ -75,3 +75,5 @@ pub const MANAGED_PARTITIONS: &[&str] = &[
     "optics",
     "prism",
 ];
+
+pub const MAX_MERGE_JSON_DEPTH: usize = 64;

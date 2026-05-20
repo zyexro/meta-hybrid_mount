@@ -489,17 +489,27 @@ fn handle_sse_endpoint(
         clients.push(sse_stream);
     }
 
-    // Block until shutdown or client disconnect
+    // Block until shutdown or client disconnect. Read with 5 s timeout so we
+    // can periodically send an SSE comment keepalive.
+    const KEEPALIVE_SECS: u64 = 30;
+    const READ_TIMEOUT_SECS: u64 = 5;
+
     stream
-        .set_read_timeout(Some(Duration::from_secs(5)))
+        .set_read_timeout(Some(Duration::from_secs(READ_TIMEOUT_SECS)))
         .context("Failed to set SSE read timeout")?;
     let mut buf = [0u8; 1];
+    let mut last_keepalive = std::time::Instant::now();
     while !shutdown.load(Ordering::Relaxed) {
         match stream.read(&mut buf) {
             Ok(0) => break,
             Err(ref e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => {}
             Err(_) => break,
             _ => {}
+        }
+        if last_keepalive.elapsed().as_secs() >= KEEPALIVE_SECS {
+            // SSE comment line — ignored by clients, keeps TCP alive.
+            let _ = write!(stream, ": keepalive\n\n").and_then(|_| stream.flush());
+            last_keepalive = std::time::Instant::now();
         }
     }
 

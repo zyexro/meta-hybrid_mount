@@ -617,7 +617,8 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
 fn patch_config_file(config_path: &Path, patch: Value) -> Result<Config> {
     let config = load_runtime_config_uncached(config_path)?;
     let mut payload = serde_json::to_value(config).context("Failed to encode current config")?;
-    merge_json(&mut payload, patch);
+    merge_json(&mut payload, patch, 0)
+        .context("Failed to merge config patch (nesting too deep)")?;
 
     let config: Config =
         serde_json::from_value(payload).context("Failed to decode patched config")?;
@@ -625,12 +626,18 @@ fn patch_config_file(config_path: &Path, patch: Value) -> Result<Config> {
     Ok(config)
 }
 
-fn merge_json(target: &mut Value, patch: Value) {
+fn merge_json(target: &mut Value, patch: Value, depth: usize) -> Result<()> {
+    if depth > crate::defs::MAX_MERGE_JSON_DEPTH {
+        bail!(
+            "JSON patch nesting exceeds max depth of {}",
+            crate::defs::MAX_MERGE_JSON_DEPTH
+        );
+    }
     match (target, patch) {
         (Value::Object(target), Value::Object(patch)) => {
             for (key, value) in patch {
                 match target.get_mut(&key) {
-                    Some(existing) => merge_json(existing, value),
+                    Some(existing) => merge_json(existing, value, depth + 1)?,
                     None => {
                         target.insert(key, value);
                     }
@@ -641,6 +648,7 @@ fn merge_json(target: &mut Value, patch: Value) {
             *target = patch;
         }
     }
+    Ok(())
 }
 
 fn read_kernel_uname_payload() -> Result<Value> {

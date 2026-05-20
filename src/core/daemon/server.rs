@@ -42,7 +42,15 @@ use crate::{core::runtime_state::RuntimeState, defs, sys::fs::atomic_write};
 mod commands;
 mod http;
 
-pub fn serve(_config: crate::conf::config::Config) -> Result<()> {
+pub fn serve(config: crate::conf::config::Config) -> Result<()> {
+    if config.daemon_startup_mode == crate::conf::schema::DaemonStartupMode::Persistent {
+        crate::scoped_log!(
+            warn,
+            "daemon",
+            "daemon_startup_mode=persistent is not supported under the KSU module lifecycle — \
+             the service exits once idle regardless of this setting"
+        );
+    }
     crate::utils::check_ksu();
 
     fs::create_dir_all(defs::RUN_DIR)
