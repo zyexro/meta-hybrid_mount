@@ -1,4 +1,42 @@
 
+## v4.1.2
+
+
+### <!-- 2 --> Fixes
+
+- Update zip file naming conventions for consistency in package detection
+
+- Remove tree filter in release checkout and sync missing locale keys - Remove filter: 'tree:0' from release job checkout to fix git-cliff changelog generation error - Add 19 missing i18n keys across es-ES, it-IT, ja-JP, ru-RU, uk-UA, vi-VN, zh-TW locale files (kasumi uname, cmdline, unload warning, etc.)
+
+- Make clippy happy
+
+
+
+### <!-- 4 --> Refactors
+
+- Move build.rs module.prop to OUT_DIR and split KasumiTab into sub-components - build.rs: write module.prop to OUT_DIR instead of source tree; replace rerun-if-changed on .git directory with .git/HEAD; consolidate imports - KasumiTab: decompose 1332-line single component into index.tsx orchestrator and 6 focused section components (Lkm, Runtime, Identity, UserHide, Maps, Features), plus HeroCard, SectionShell, types, and utils
+
+- Replace catch (e: any) with unknown and add .catch() to void calls - Add getErrorMessage() helper to safely extract messages from unknown - Replace all 12 catch (e: any) with catch (e: unknown) using the helper - Add .catch() handlers to 3 void async calls in App.tsx that lacked them
+
+- Improve caption handling by introducing truncation functions
+
+- Streamline configuration structs by removing redundant serde defaults
+
+
+
+### <!-- 5 --> Documentation
+
+- Replace hardcoded version badge with dynamic latest-tag badge Use shields.io github/v/tag endpoint instead of hardcoded 4.0.5 so the version badge always reflects the latest release tag automatically.
+
+
+
+### <!-- 8 --> Maintenance
+
+- Remove overlay fallback feature and related configurations - Eliminated the `enable_overlay_fallback` option from configuration files and documentation across multiple languages. - Removed associated fallback logic from the codebase, including functions and references in the executor and magic mount modules. - Updated README files in various languages to reflect the removal of the overlay fallback feature. - Adjusted WebUI components and localization files to remove references to the overlay fallback option.
+
+
+
+
 ## v4.1.0
 
 
