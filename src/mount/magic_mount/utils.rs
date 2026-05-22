@@ -137,22 +137,6 @@ where
     Ok(())
 }
 
-fn should_fallback_overlay_files(
-    rules: &ModuleRules,
-    descendant_rule_prefixes: &HashSet<String>,
-    relative_path: &Path,
-    use_kasumi: bool,
-    overlay_fallback_enabled: bool,
-) -> bool {
-    let relative = relative_path.to_string_lossy();
-    overlay_fallback_enabled
-        && matches!(
-            rules.effective_mode(relative_path, use_kasumi),
-            MountMode::Overlay
-        )
-        && descendant_rule_prefixes.contains(relative.as_ref())
-}
-
 fn collect_magic_subtree(
     target: &mut Node,
     module_dir: &Path,
@@ -160,16 +144,8 @@ fn collect_magic_subtree(
     rules: &ModuleRules,
     descendant_rule_prefixes: &HashSet<String>,
     use_kasumi: bool,
-    overlay_fallback_enabled: bool,
 ) -> Result<bool> {
     let mut has_file = false;
-    let overlay_file_fallback = should_fallback_overlay_files(
-        rules,
-        descendant_rule_prefixes,
-        relative_path,
-        use_kasumi,
-        overlay_fallback_enabled,
-    );
 
     for entry_result in module_dir.read_dir()? {
         let entry = match entry_result {
@@ -223,7 +199,6 @@ fn collect_magic_subtree(
                     rules,
                     descendant_rule_prefixes,
                     use_kasumi,
-                    overlay_fallback_enabled,
                 )? || node.replace;
                 if subtree_has_file {
                     target.children.insert(name, node);
@@ -231,19 +206,9 @@ fn collect_magic_subtree(
                 }
             }
             Ok(_) => {
-                let use_magic_fallback =
-                    overlay_file_fallback && matches!(effective_mode, MountMode::Overlay);
-                if (matches!(effective_mode, MountMode::Magic) || use_magic_fallback)
+                if matches!(effective_mode, MountMode::Magic)
                     && let Some(node) = Node::new_module(&name, &entry)
                 {
-                    if use_magic_fallback {
-                        crate::scoped_log!(
-                            debug,
-                            "magic:collect",
-                            "overlay direct entry fallback: relative={}",
-                            next_relative.display()
-                        );
-                    }
                     if target.children.get(&name).is_some_and(|existing| {
                         existing.file_type != crate::mount::node::NodeFileType::Symlink
                     }) {
@@ -273,7 +238,6 @@ pub fn collect_module_files(
     managed_partitions: &[String],
     magic_modules: &[Module],
     use_kasumi: bool,
-    overlay_fallback_enabled: bool,
 ) -> Result<Option<Node>> {
     let mut root = Node::new_root("");
     let mut system = Node::new_root("system");
@@ -400,7 +364,6 @@ pub fn collect_module_files(
                     rules,
                     &descendant_rule_prefixes,
                     use_kasumi,
-                    overlay_fallback_enabled,
                 )?);
                 continue;
             }
@@ -422,7 +385,6 @@ pub fn collect_module_files(
                 rules,
                 &descendant_rule_prefixes,
                 use_kasumi,
-                overlay_fallback_enabled,
             )?);
         }
     }

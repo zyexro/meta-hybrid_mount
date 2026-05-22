@@ -64,7 +64,6 @@
     "mode_tmpfsDesc": "Basato su RAM. I/O piu veloce, si resetta al riavvio.",
     "mode_ext4": "Ext4",
     "mode_ext4Desc": "Immagine loopback. Persistente, risparmia RAM.",
-    "enableOverlayFallback": "Abilita fallback overlay",
     "daemonStartupMode": "Demone persistente",
     "kasumiConfigSaved": "Kasumi config saved. Runtime was not changed."
   },

@@ -29,7 +29,6 @@ export async function saveConfigToFile(config: AppConfig): Promise<void> {
     mountsource: normalized.mountsource,
     overlay_mode: normalized.overlay_mode,
     disable_umount: normalized.disable_umount,
-    enable_overlay_fallback: normalized.enable_overlay_fallback,
     default_mode: normalized.default_mode,
     daemon_startup_mode: normalized.daemon_startup_mode,
     rules: normalized.rules,

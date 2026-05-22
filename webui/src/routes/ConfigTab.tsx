@@ -373,29 +373,6 @@ export default function ConfigTab() {
             </button>
 
             <button
-              class={`option-tile clickable tertiary ${configStore.config.enable_overlay_fallback ? "active" : ""}`}
-              onClick={() => toggle("enable_overlay_fallback")}
-              type="button"
-            >
-              <md-ripple></md-ripple>
-              <div class="tile-top">
-                <div class="tile-icon">
-                  <md-icon>
-                    <svg viewBox="0 0 24 24">
-                      <path d={ICONS.shield} />
-                    </svg>
-                  </md-icon>
-                </div>
-              </div>
-              <div class="tile-bottom">
-                <span class="tile-label">
-                  {uiStore.L.config?.enableOverlayFallback ||
-                    "Enable Overlay Fallback"}
-                </span>
-              </div>
-            </button>
-
-            <button
               class={`option-tile clickable tertiary ${configStore.config.daemon_startup_mode === "persistent" ? "active" : ""}`}
               onClick={toggleDaemonMode}
               type="button"

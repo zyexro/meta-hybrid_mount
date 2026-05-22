@@ -16,7 +16,6 @@ moduledir = "/data/adb/modules"
 mountsource = "KSU"
 overlay_mode = "ext4"
 disable_umount = false
-enable_overlay_fallback = false
 default_mode = "overlay"
 
 [kasumi]

@@ -64,7 +64,6 @@
     "mode_tmpfsDesc": "RAM ベース、高速な I/O、再起動時にリセットされます。",
     "mode_ext4": "Ext4",
     "mode_ext4Desc": "ループバックイメージ。永続的、RAM を節約できます。",
-    "enableOverlayFallback": "Overlay フォールバックを有効化",
     "daemonStartupMode": "常駐デーモン",
     "kasumiConfigSaved": "Kasumi config saved. Runtime was not changed."
   },

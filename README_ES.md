@@ -124,12 +124,11 @@ default_mode = "magic"
 | Modo | Backend | Uso recomendado |
 |------|---------|-----------------|
 | `overlay` | OverlayFS | Módulos que agregan o reemplazan archivos sin conflictos. Modo predeterminado. |
-| `magic` | Bind mount | Reemplazo directo por archivo; fallback cuando OverlayFS no está disponible. |
+| `magic` | Bind mount | Reemplazo directo por archivo. |
 | `kasumi` | Kasumi LKM | Enrutamiento mirror explícito o funciones runtime hide/spoof. |
 | `ignore` | Ninguno | Excluir rutas específicas del procesamiento de montaje. |
 
-OverlayFS admite `ext4` como almacenamiento persistente predeterminado y `tmpfs` como alternativa volátil y ligera. Si `enable_overlay_fallback = true`, los módulos planeados para OverlayFS que fallen se reintentan con Magic Mount.
-
+OverlayFS admite `ext4` como almacenamiento persistente predeterminado y `tmpfs` como alternativa volátil y ligera.
 ---
 
 ## WebUI
@@ -171,7 +170,6 @@ Ruta predeterminada: `/data/adb/hybrid-mount/config.toml`.
 | `mountsource` | string | autodetección | Entorno runtime (`KSU`, `APatch`). |
 | `overlay_mode` | `ext4` \| `tmpfs` | `ext4` | Almacenamiento upper/work de OverlayFS. |
 | `disable_umount` | bool | `false` | Omite operaciones umount, solo para depuración. |
-| `enable_overlay_fallback` | bool | `false` | Reintenta con Magic Mount si OverlayFS no está disponible. |
 | `default_mode` | `overlay` \| `magic` \| `kasumi` | `overlay` | Política global predeterminada. |
 | `daemon_startup_mode` | `on-demand` \| `persistent` | `on-demand` | Modo de inicio del daemon. |
 | `rules` | map | `{}` | Políticas por módulo y por ruta. |

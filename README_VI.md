@@ -124,12 +124,11 @@ default_mode = "magic"
 | Chế độ | Backend | Phù hợp với |
 |--------|---------|-------------|
 | `overlay` | OverlayFS | Module thêm hoặc thay thế tệp không xung đột. Chế độ mặc định. |
-| `magic` | Bind mount | Thay thế trực tiếp từng tệp; fallback khi OverlayFS không khả dụng. |
+| `magic` | Bind mount | Thay thế trực tiếp từng tệp. |
 | `kasumi` | Kasumi LKM | Cần mirror routing rõ ràng hoặc tính năng runtime hide/spoof. |
 | `ignore` | Không | Loại trừ đường dẫn cụ thể khỏi xử lý mount. |
 
-OverlayFS hỗ trợ `ext4` làm lưu trữ bền vững mặc định và `tmpfs` làm lựa chọn tạm, nhẹ hơn. Khi `enable_overlay_fallback = true`, module được lập kế hoạch cho OverlayFS nhưng mount thất bại sẽ được thử lại bằng Magic Mount.
-
+OverlayFS hỗ trợ `ext4` làm lưu trữ bền vững mặc định và `tmpfs` làm lựa chọn tạm, nhẹ hơn.
 ---
 
 ## WebUI
@@ -171,7 +170,6 @@ Tài liệu README có sẵn bằng [English](README.md), [简体中文](README_
 | `mountsource` | string | tự phát hiện | Môi trường runtime (`KSU`, `APatch`). |
 | `overlay_mode` | `ext4` \| `tmpfs` | `ext4` | Lưu trữ upper/work của OverlayFS. |
 | `disable_umount` | bool | `false` | Bỏ qua umount, chỉ dùng để debug. |
-| `enable_overlay_fallback` | bool | `false` | Thử lại bằng Magic Mount nếu OverlayFS không khả dụng. |
 | `default_mode` | `overlay` \| `magic` \| `kasumi` | `overlay` | Chính sách toàn cục mặc định. |
 | `daemon_startup_mode` | `on-demand` \| `persistent` | `on-demand` | Chế độ khởi động daemon. |
 | `rules` | map | `{}` | Chính sách theo module và theo đường dẫn. |

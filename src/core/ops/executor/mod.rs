@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod fallback;
 mod magic;
 mod overlay;
 
@@ -28,10 +27,11 @@ use crate::{
     conf::config,
     core::{
         inventory::Module,
-        ops::plan::MountPlan,
+        ops::plan::{MountPlan, OverlayOperation},
         recovery::{FailureStage, ModuleStageFailure},
         runtime_state::MountStatistics,
     },
+    utils,
 };
 
 pub struct ExecutionResult {
@@ -129,35 +129,14 @@ impl Executor {
                         mount_stats.record_overlay_mount();
                     }
                     Err(err) => {
-                        let involved_modules = fallback::collect_involved_modules(op);
-                        let is_symlink_loop = fallback::is_symlink_loop_mount_error(&err);
-                        if is_symlink_loop {
-                            if !fallback::overlay_fallback_allowed(config) {
-                                crate::scoped_log!(
-                                    error,
-                                    "executor",
-                                    "overlay fallback denied: target={}, reason=symlink_loop, enable_overlay_fallback=false",
-                                    op.target
-                                );
-                            } else if involved_modules.is_empty() {
-                                crate::scoped_log!(
-                                    error,
-                                    "executor",
-                                    "overlay fallback denied: target={}, reason=symlink_loop_no_modules",
-                                    op.target
-                                );
-                            } else {
-                                crate::scoped_log!(
-                                    warn,
-                                    "executor",
-                                    "overlay fallback: target={}, reason=symlink_loop, modules={}",
-                                    op.target,
-                                    involved_modules.join(", ")
-                                );
-                                mount_stats.record_failed();
-                                final_magic_ids.extend(involved_modules);
-                                continue;
-                            }
+                        let involved_modules = collect_involved_modules(op);
+                        if is_symlink_loop_mount_error(&err) {
+                            crate::scoped_log!(
+                                error,
+                                "executor",
+                                "overlay failed: target={}, reason=symlink_loop",
+                                op.target
+                            );
                         } else {
                             crate::scoped_log!(
                                 error,
@@ -177,23 +156,7 @@ impl Executor {
             }
         } else {
             if !plan.overlay_ops.is_empty() {
-                if fallback::overlay_fallback_allowed(config) {
-                    let fallback_ids = fallback::collect_overlay_modules_for_magic_fallback(plan);
-                    if fallback_ids.is_empty() {
-                        bail!(
-                            "[executor] overlayfs unsupported and no modules could be inferred for magic fallback"
-                        );
-                    }
-                    crate::scoped_log!(
-                        warn,
-                        "executor",
-                        "overlayfs fallback: supported=false, switched_modules={}",
-                        fallback_ids.len()
-                    );
-                    final_magic_ids.extend(fallback_ids);
-                } else {
-                    bail!("[executor] overlayfs unsupported and overlay operations are pending");
-                }
+                bail!("[executor] overlayfs unsupported and overlay operations are pending");
             }
             crate::scoped_log!(
                 info,
@@ -228,7 +191,7 @@ impl Executor {
             )
             .map_err(|err| {
                 let failed_module_ids =
-                    fallback::resolve_magic_failure_modules(&err, &magic_need_list);
+                    resolve_magic_failure_modules(&err, &magic_need_list);
                 ModuleStageFailure::new(
                     FailureStage::Execute,
                     failed_module_ids.clone(),
@@ -300,4 +263,36 @@ impl Executor {
     fn is_supported() -> Result<bool> {
         crate::mount::overlayfs::utils::is_overlay_supported()
     }
+}
+
+fn resolve_magic_failure_modules(err: &anyhow::Error, fallback: &[String]) -> Vec<String> {
+    if let Some(magic_failure) = err.downcast_ref::<ModuleStageFailure>()
+        && !magic_failure.module_ids.is_empty()
+    {
+        return magic_failure.module_ids.clone();
+    }
+    fallback.to_vec()
+}
+
+fn is_symlink_loop_mount_error(err: &anyhow::Error) -> bool {
+    let mut cursor = Some(err.as_ref() as &(dyn std::error::Error + 'static));
+    while let Some(current) = cursor {
+        let msg = current.to_string();
+        if msg.contains("Too many symbolic links") || msg.contains("os error 40") {
+            return true;
+        }
+        cursor = current.source();
+    }
+    false
+}
+
+fn collect_involved_modules(op: &OverlayOperation) -> Vec<String> {
+    let mut involved_modules: Vec<String> = op
+        .lowerdirs
+        .iter()
+        .filter_map(|p| utils::extract_module_id(p))
+        .collect();
+    involved_modules.sort();
+    involved_modules.dedup();
+    involved_modules
 }

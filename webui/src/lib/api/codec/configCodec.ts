@@ -181,9 +181,6 @@ export function normalizeConfig(value: unknown): AppConfig {
     disable_umount: isBoolean(next.disable_umount)
       ? next.disable_umount
       : DEFAULT_CONFIG.disable_umount,
-    enable_overlay_fallback: isBoolean(next.enable_overlay_fallback)
-      ? next.enable_overlay_fallback
-      : DEFAULT_CONFIG.enable_overlay_fallback,
     default_mode: defaultMode,
     daemon_startup_mode:
       next.daemon_startup_mode === "persistent" ? "persistent" : "on-demand",

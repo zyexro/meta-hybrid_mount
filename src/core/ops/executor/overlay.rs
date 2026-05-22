@@ -16,7 +16,6 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::fallback;
 #[cfg(feature = "kasumi")]
 use crate::core::kasumi_coordinator::KasumiCoordinator;
 #[cfg(any(target_os = "linux", target_os = "android"))]
@@ -47,17 +46,17 @@ fn mount_overlay_inner(
     if let Some(kasumi) = kasumi {
         kasumi.hide_overlay_xattrs(Path::new(&op.target));
     }
-    Ok(fallback::collect_involved_modules(op))
+    Ok(super::collect_involved_modules(op))
 }
 
 #[cfg(not(feature = "kasumi"))]
 fn mount_overlay_inner(op: &OverlayOperation, config: &config::Config) -> Result<Vec<String>> {
     mount_overlay_base(op, config)?;
-    Ok(fallback::collect_involved_modules(op))
+    Ok(super::collect_involved_modules(op))
 }
 
 fn mount_overlay_base(op: &OverlayOperation, config: &config::Config) -> Result<()> {
-    let involved_modules = fallback::collect_involved_modules(op);
+    let involved_modules = super::collect_involved_modules(op);
 
     crate::scoped_log!(
         debug,

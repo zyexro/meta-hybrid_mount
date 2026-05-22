@@ -58,7 +58,6 @@ pub(super) fn mount_magic(
             mount_source: &config.mountsource,
             managed_partitions: &managed_partitions,
             use_kasumi,
-            overlay_fallback_enabled: config.enable_overlay_fallback,
         },
         &selected_modules,
         !config.disable_umount,

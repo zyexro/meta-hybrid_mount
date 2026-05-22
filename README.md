@@ -144,7 +144,7 @@ default_mode = "magic"
 | Mode | Backend | Best for |
 |------|---------|----------|
 | `overlay` | OverlayFS | Modules that add or replace files without conflicts. Default mode. |
-| `magic` | Bind mount | Modules that need direct per-file replacement; fallback when OverlayFS is unavailable. |
+| `magic` | Bind mount | Modules that need direct per-file replacement. |
 | `kasumi` | Kasumi LKM | Modules requiring explicit mirror routing or runtime hide/spoof features. |
 | `ignore` | — | Excluding specific paths from any mount processing. |
 
@@ -158,10 +158,6 @@ The OverlayFS backend supports two storage strategies for the upper/work layers:
 ```toml
 overlay_mode = "ext4"
 ```
-
-### Fallback behavior
-
-When `enable_overlay_fallback = true`, modules planned for OverlayFS that cannot mount (kernel lacks overlay support) automatically retry as Magic Mount. This reduces boot-time failures on kernels with unstable overlay support.
 
 ---
 
@@ -212,7 +208,6 @@ Default path: `/data/adb/hybrid-mount/config.toml`.
 | `mountsource` | string | auto-detect | Runtime source tag (`KSU`, `APatch`). |
 | `overlay_mode` | `ext4` \| `tmpfs` | `ext4` | Overlay upper/work storage mode. |
 | `disable_umount` | bool | `false` | Skip umount operations (debug only). |
-| `enable_overlay_fallback` | bool | `false` | Retry overlay-planned modules as Magic Mount when OverlayFS is unavailable. |
 | `default_mode` | `overlay` \| `magic` \| `kasumi` | `overlay` | Global default mount policy. |
 | `daemon_startup_mode` | `on-demand` \| `persistent` | `on-demand` | Daemon startup behavior. |
 | `rules` | map | `{}` | Per-module and per-path mount policies. |
@@ -222,7 +217,6 @@ Default path: `/data/adb/hybrid-mount/config.toml`.
 ```toml
 moduledir = "/data/adb/modules"
 overlay_mode = "ext4"
-enable_overlay_fallback = true
 default_mode = "overlay"
 daemon_startup_mode = "on-demand"
 
@@ -323,15 +317,14 @@ When multiple policies could apply to a path, evaluation order is:
 
 ### Behavior matrix
 
-| Rule result | Backend available? | `enable_overlay_fallback` | Effective behavior |
-| --- | --- | --- | --- |
-| `overlay` | Yes | any | Mount with OverlayFS. |
-| `overlay` | No | `false` | Skip and report as failed. |
-| `overlay` | No | `true` | Retry as Magic Mount. |
-| `magic` | n/a | any | Mount with Magic Mount. |
-| `kasumi` | Yes | any | Route through Kasumi. |
-| `kasumi` | No | any | Skip Kasumi mapping. |
-| `ignore` | n/a | any | Do not mount. |
+| Rule result | Backend available? | Effective behavior |
+| --- | --- | --- |
+| `overlay` | Yes | Mount with OverlayFS. |
+| `overlay` | No | Skip and report as failed. |
+| `magic` | n/a | Mount with Magic Mount. |
+| `kasumi` | Yes | Route through Kasumi. |
+| `kasumi` | No | Skip Kasumi mapping. |
+| `ignore` | n/a | Do not mount. |
 
 ### Module marker files
 
@@ -352,7 +345,6 @@ If multiple case variants of the same marker exist in one directory, cleanup ope
 
 - **One problematic binary on bind mount, rest on overlay**: set module default to `overlay`, override the binary path to `magic`.
 - **Temporarily exclude a conflicting file**: set the path to `ignore`.
-- **Kernel with flaky OverlayFS**: set `enable_overlay_fallback = true`.
 
 ---
 

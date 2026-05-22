@@ -124,12 +124,11 @@ default_mode = "magic"
 | Режим | Backend | Подходит для |
 |-------|---------|--------------|
 | `overlay` | OverlayFS | Модулей, добавляющих или заменяющих файлы без конфликтов. Режим по умолчанию. |
-| `magic` | Bind mount | Прямой замены отдельных файлов; fallback, когда OverlayFS недоступен. |
+| `magic` | Bind mount | Прямой замены отдельных файлов. |
 | `kasumi` | Kasumi LKM | Явного mirror routing или runtime-функций hide/spoof. |
 | `ignore` | Нет | Исключения конкретных путей из обработки монтирования. |
 
-OverlayFS поддерживает `ext4` как постоянное хранилище по умолчанию и `tmpfs` как легкий временный вариант. При `enable_overlay_fallback = true` модули, которые не удалось смонтировать через OverlayFS, повторяются через Magic Mount.
-
+OverlayFS поддерживает `ext4` как постоянное хранилище по умолчанию и `tmpfs` как легкий временный вариант.
 ---
 
 ## WebUI
@@ -171,7 +170,6 @@ README-документация доступна на [English](README.md), [简
 | `mountsource` | string | auto-detect | Runtime-окружение (`KSU`, `APatch`). |
 | `overlay_mode` | `ext4` \| `tmpfs` | `ext4` | Хранилище upper/work для OverlayFS. |
 | `disable_umount` | bool | `false` | Пропуск umount, только для отладки. |
-| `enable_overlay_fallback` | bool | `false` | Повтор через Magic Mount, если OverlayFS недоступен. |
 | `default_mode` | `overlay` \| `magic` \| `kasumi` | `overlay` | Глобальная политика по умолчанию. |
 | `daemon_startup_mode` | `on-demand` \| `persistent` | `on-demand` | Режим запуска daemon. |
 | `rules` | map | `{}` | Политики по модулям и путям. |

@@ -10,7 +10,6 @@ export interface AppConfig {
   mountsource: string;
   overlay_mode: OverlayMode;
   disable_umount: boolean;
-  enable_overlay_fallback: boolean;
   default_mode: MountMode;
   daemon_startup_mode: "on-demand" | "persistent";
   kasumi: KasumiConfig;
