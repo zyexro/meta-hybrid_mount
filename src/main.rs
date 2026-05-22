@@ -21,7 +21,8 @@ use hybrid_mount::core;
 
 fn main() -> Result<()> {
     if matches!(std::env::var("KSU_LATE_LOAD").as_deref(), Ok("1")) {
-        panic!("不支持Late-load（越狱）模式");
+        eprintln!("不支持Late-load（越狱）模式");
+        std::process::exit(1);
     }
 
     #[cfg(feature = "control-plane")]

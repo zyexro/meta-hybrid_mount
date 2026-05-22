@@ -16,8 +16,7 @@ mod utils;
 
 use std::{
     collections::{BTreeMap, HashSet},
-    error::Error as StdError,
-    fmt, fs,
+    fs,
     path::{Path, PathBuf},
 };
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
@@ -124,7 +123,11 @@ where
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::mount::umount_mgr::send_umountable;
 use crate::{
-    core::{inventory::Module, runtime_state::MountStatistics},
+    core::{
+        inventory::Module,
+        recovery::ModuleStageFailure,
+        runtime_state::MountStatistics,
+    },
     mount::{
         magic_mount::utils::{clone_symlink, collect_module_files, mount_mirror},
         node::{Node, NodeFileType},
@@ -141,39 +144,6 @@ fn try_remount_readonly(mount_target: &Path, log_path: &Path) {
             log_path.display(),
             e
         );
-    }
-}
-
-#[derive(Debug)]
-pub struct MagicMountModuleFailure {
-    pub module_ids: Vec<String>,
-    pub source: anyhow::Error,
-}
-
-impl MagicMountModuleFailure {
-    pub fn new(module_ids: Vec<String>, source: anyhow::Error) -> Self {
-        Self { module_ids, source }
-    }
-}
-
-impl fmt::Display for MagicMountModuleFailure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.module_ids.is_empty() {
-            write!(f, "magic mount module failure: {}", self.source)
-        } else {
-            write!(
-                f,
-                "magic mount module failure for [{}]: {}",
-                self.module_ids.join(", "),
-                self.source
-            )
-        }
-    }
-}
-
-impl StdError for MagicMountModuleFailure {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        Some(self.source.as_ref())
     }
 }
 
@@ -202,7 +172,7 @@ fn wrap_with_module_context(err: anyhow::Error, node: &Node) -> anyhow::Error {
     if module_ids.is_empty() {
         err
     } else {
-        MagicMountModuleFailure::new(module_ids, err).into()
+        ModuleStageFailure::execute(module_ids, err).into()
     }
 }
 
@@ -505,7 +475,7 @@ impl MagicMount {
                     if let Some(ids) = failed_module_ids
                         && !ids.is_empty()
                     {
-                        return Err(MagicMountModuleFailure::new(ids, e).into());
+                        return Err(ModuleStageFailure::execute(ids, e).into());
                     }
                     return Err(e);
                 }

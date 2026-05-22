@@ -16,8 +16,7 @@ use std::collections::HashSet;
 
 use crate::{
     conf::config,
-    core::ops::plan::{MountPlan, OverlayOperation},
-    mount::magic_mount,
+    core::{ops::plan::{MountPlan, OverlayOperation}, recovery::ModuleStageFailure},
     utils,
 };
 
@@ -29,7 +28,7 @@ pub(super) fn resolve_magic_failure_modules(
     err: &anyhow::Error,
     fallback: &[String],
 ) -> Vec<String> {
-    if let Some(magic_failure) = err.downcast_ref::<magic_mount::MagicMountModuleFailure>()
+    if let Some(magic_failure) = err.downcast_ref::<ModuleStageFailure>()
         && !magic_failure.module_ids.is_empty()
     {
         return magic_failure.module_ids.clone();

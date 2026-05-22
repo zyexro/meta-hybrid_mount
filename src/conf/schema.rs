@@ -44,52 +44,33 @@ pub struct KasumiMapsRuleConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct KasumiKstatRuleConfig {
-    #[serde(default)]
     pub target_ino: u64,
-    #[serde(default)]
     pub target_pathname: PathBuf,
-    #[serde(default)]
     pub spoofed_ino: u64,
-    #[serde(default)]
     pub spoofed_dev: u64,
-    #[serde(default)]
     pub spoofed_nlink: u32,
-    #[serde(default)]
     pub spoofed_size: i64,
-    #[serde(default)]
     pub spoofed_atime_sec: i64,
-    #[serde(default)]
     pub spoofed_atime_nsec: i64,
-    #[serde(default)]
     pub spoofed_mtime_sec: i64,
-    #[serde(default)]
     pub spoofed_mtime_nsec: i64,
-    #[serde(default)]
     pub spoofed_ctime_sec: i64,
-    #[serde(default)]
     pub spoofed_ctime_nsec: i64,
-    #[serde(default)]
     pub spoofed_blksize: u64,
-    #[serde(default)]
     pub spoofed_blocks: u64,
-    #[serde(default)]
     pub is_static: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct KasumiUnameConfig {
-    #[serde(default)]
     pub sysname: String,
-    #[serde(default)]
     pub nodename: String,
-    #[serde(default)]
     pub release: String,
-    #[serde(default)]
     pub version: String,
-    #[serde(default)]
     pub machine: String,
-    #[serde(default)]
     pub domainname: String,
 }
 
@@ -102,64 +83,42 @@ pub enum KasumiUnameMode {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct KasumiMountHideConfig {
-    #[serde(default)]
     pub enabled: bool,
-    #[serde(default)]
     pub path_pattern: PathBuf,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
 pub struct KasumiStatfsSpoofConfig {
-    #[serde(default)]
     pub enabled: bool,
-    #[serde(default)]
     pub path: PathBuf,
-    #[serde(default)]
     pub spoof_f_type: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct KasumiConfig {
-    #[serde(default)]
     pub enabled: bool,
-    #[serde(default = "default_true")]
     pub lkm_autoload: bool,
-    #[serde(default = "default_kasumi_lkm_dir")]
     pub lkm_dir: PathBuf,
-    #[serde(default)]
     pub lkm_kmi_override: String,
-    #[serde(default = "default_kasumi_mirror_path")]
     pub mirror_path: PathBuf,
-    #[serde(default)]
     pub enable_kernel_debug: bool,
-    #[serde(default)]
     pub enable_stealth: bool,
-    #[serde(default)]
     pub enable_hidexattr: bool,
-    #[serde(default)]
     pub enable_mount_hide: bool,
-    #[serde(default)]
     pub enable_maps_spoof: bool,
-    #[serde(default)]
     pub enable_statfs_spoof: bool,
-    #[serde(default)]
     pub enable_selinux_fix: bool,
-    #[serde(default)]
     pub mount_hide: KasumiMountHideConfig,
-    #[serde(default)]
     pub statfs_spoof: KasumiStatfsSpoofConfig,
-    #[serde(default)]
     pub hide_uids: Vec<u32>,
-    #[serde(default)]
     pub uname_mode: KasumiUnameMode,
-    #[serde(default)]
     pub uname: KasumiUnameConfig,
-    #[serde(default)]
     pub cmdline_value: String,
-    #[serde(default)]
     pub kstat_rules: Vec<KasumiKstatRuleConfig>,
-    #[serde(default)]
     pub maps_rules: Vec<KasumiMapsRuleConfig>,
 }
 
@@ -167,10 +126,10 @@ impl Default for KasumiConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            lkm_autoload: default_true(),
-            lkm_dir: default_kasumi_lkm_dir(),
+            lkm_autoload: true,
+            lkm_dir: PathBuf::from(defs::KASUMI_LKM_DIR),
             lkm_kmi_override: String::new(),
-            mirror_path: default_kasumi_mirror_path(),
+            mirror_path: PathBuf::from(defs::KASUMI_MIRROR_DIR),
             enable_kernel_debug: false,
             enable_stealth: false,
             enable_hidexattr: false,
@@ -208,24 +167,16 @@ impl std::fmt::Display for DaemonStartupMode {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(default)]
 pub struct Config {
-    #[serde(default = "default_moduledir")]
     pub moduledir: PathBuf,
-    #[serde(default = "default_mountsource")]
     pub mountsource: String,
-    #[serde(default)]
     pub overlay_mode: OverlayMode,
-    #[serde(default)]
     pub disable_umount: bool,
-    #[serde(default)]
     pub enable_overlay_fallback: bool,
-    #[serde(default)]
     pub default_mode: DefaultMode,
-    #[serde(default)]
     pub kasumi: KasumiConfig,
-    #[serde(default)]
     pub rules: HashMap<String, ModuleRules>,
-    #[serde(default)]
     pub daemon_startup_mode: DaemonStartupMode,
 }
 
@@ -235,18 +186,6 @@ fn default_moduledir() -> PathBuf {
 
 fn default_mountsource() -> String {
     crate::sys::mount::detect_mount_source()
-}
-
-fn default_kasumi_mirror_path() -> PathBuf {
-    PathBuf::from(defs::KASUMI_MIRROR_DIR)
-}
-
-fn default_kasumi_lkm_dir() -> PathBuf {
-    PathBuf::from(defs::KASUMI_LKM_DIR)
-}
-
-fn default_true() -> bool {
-    true
 }
 
 impl Default for Config {

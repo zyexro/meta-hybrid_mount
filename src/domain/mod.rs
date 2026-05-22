@@ -60,10 +60,9 @@ impl MountMode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct ModuleRules {
-    #[serde(default)]
     pub default_mode: MountMode,
-    #[serde(default)]
     pub paths: HashMap<String, MountMode>,
 }
 

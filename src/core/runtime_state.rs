@@ -31,24 +31,16 @@ use crate::{
 };
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[serde(default)]
 pub struct MountStatistics {
-    #[serde(default)]
     pub total_mounts: usize,
-    #[serde(default)]
     pub successful_mounts: usize,
-    #[serde(default)]
     pub failed_mounts: usize,
-    #[serde(default)]
     pub tmpfs_created: usize,
-    #[serde(default)]
     pub files_mounted: usize,
-    #[serde(default)]
     pub dirs_mounted: usize,
-    #[serde(default)]
     pub symlinks_created: usize,
-    #[serde(default)]
     pub overlayfs_mounts: usize,
-    #[serde(default)]
     pub ignored_entries: usize,
 }
 
@@ -113,54 +105,37 @@ impl MountStatistics {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
+#[serde(default)]
 pub struct ModuleModeStats {
-    #[serde(default)]
     pub overlayfs: usize,
-    #[serde(default)]
     pub magicmount: usize,
-    #[serde(default)]
     pub kasumi: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct KasumiRuntimeInfo {
-    #[serde(default)]
     pub status: String,
-    #[serde(default)]
     pub available: bool,
-    #[serde(default)]
     pub lkm_loaded: bool,
-    #[serde(default)]
     pub lkm_autoload: bool,
-    #[serde(default)]
     pub lkm_kmi_override: String,
-    #[serde(default)]
     pub lkm_current_kmi: String,
-    #[serde(default)]
     pub lkm_dir: PathBuf,
-    #[serde(default)]
     pub protocol_version: Option<i32>,
-    #[serde(default)]
     pub feature_bits: Option<i32>,
-    #[serde(default)]
     pub feature_names: Vec<String>,
-    #[serde(default)]
     pub hooks: Vec<String>,
-    #[serde(default)]
     pub rule_count: usize,
-    #[serde(default)]
     pub user_hide_rule_count: usize,
-    #[serde(default)]
     pub mirror_path: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct DaemonRuntimeInfo {
-    #[serde(default)]
     pub alive: bool,
-    #[serde(default)]
     pub socket_path: String,
-    #[serde(default)]
     pub last_refresh_ts: u64,
 }
 
