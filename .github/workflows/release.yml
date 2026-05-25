@@ -397,6 +397,10 @@ jobs:
           mv /tmp/update-nano.json update-nano.json
           cat /tmp/changelog.md | cat - changelog.md > temp && mv temp changelog.md
 
+          TAG="${{ github.ref_name }}"
+          CLEAN_VERSION="${TAG#v}"
+          sed -i "s/^version = \".*\"/version = \"${CLEAN_VERSION}\"/" Cargo.toml
+
           cargo update
 
           git add update.json update-lite.json update-nano.json changelog.md Cargo.toml Cargo.lock

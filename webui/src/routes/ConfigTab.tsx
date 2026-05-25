@@ -173,7 +173,7 @@ export default function ConfigTab() {
 
   return (
     <>
-      <Show when={ENABLE_KASUMI}>
+      <Show when={ENABLE_KASUMI && features.kasumiAvailable}>
         <div class="dialog-container">
           <md-dialog
             open={showKasumiWarning()}
@@ -396,7 +396,7 @@ export default function ConfigTab() {
           </div>
         </section>
 
-        <Show when={ENABLE_KASUMI}>
+        <Show when={ENABLE_KASUMI && features.kasumiAvailable}>
           <section class="config-group">
             <div class="webui-label">
               {uiStore.L.config?.experimentalFeatures ||

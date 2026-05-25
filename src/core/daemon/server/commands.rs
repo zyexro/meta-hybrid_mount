@@ -237,11 +237,12 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
         DaemonCommand::Init => {
             let (status_value, snapshot) = cached_status_and_snapshot(state)?;
             let mut config_value = to_value(config)?;
-            // When Kasumi is not usable (feature not compiled, kernel too
-            // old, LKM not present, or protocol mismatch), force
-            // kasumi.enabled = false in the reported config so the WebUI
-            // never shows a non-existent Kasumi mode — even when switching
-            // from a full to lite build without rebuilding the WebUI.
+            // When Kasumi is not usable (kernel too old, LKM not present, or
+            // protocol mismatch) force kasumi.enabled = false.  When the Kasumi
+            // feature is not even compiled in (lite/nano builds), strip the
+            // entire [kasumi] section from the reported config.  Both paths
+            // ensure the WebUI never shows a non-existent Kasumi mode — even
+            // when switching from a full to lite build with a stale WebUI.
             #[cfg(feature = "kasumi")]
             {
                 if (!config.kasumi.enabled || !kasumi::can_operate())
@@ -253,11 +254,12 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
             }
             #[cfg(not(feature = "kasumi"))]
             {
-                if let Some(kasumi_val) = config_value.get_mut("kasumi")
-                    && let Some(enabled) = kasumi_val.get_mut("enabled")
-                {
-                    *enabled = json!(false);
-                }
+                // Strip the entire [kasumi] section from the reported config so
+                // the WebUI never sees any kasumi data after switching from a
+                // full to a lite build.  (Forcing just enabled=false leaves the
+                // rest of the section intact, which can confuse the WebUI when
+                // ENABLE_KASUMI is accidentally true in a stale WebUI bundle.)
+                config_value.as_object_mut().map(|obj| obj.remove("kasumi"));
             }
             let version_value = to_value(&api::build_version_payload())?;
             let system_info_value = to_value(&api::build_system_info_payload(&snapshot))?;

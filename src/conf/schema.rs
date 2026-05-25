@@ -174,9 +174,17 @@ pub struct Config {
     pub overlay_mode: OverlayMode,
     pub disable_umount: bool,
     pub default_mode: DefaultMode,
+    #[serde(skip_serializing_if = "is_kasumi_default")]
     pub kasumi: KasumiConfig,
     pub rules: HashMap<String, ModuleRules>,
     pub daemon_startup_mode: DaemonStartupMode,
+}
+
+fn is_kasumi_default(_kasumi: &KasumiConfig) -> bool {
+    // In lite/nano builds the kasumi feature is not compiled in, so the
+    // kasumi config section must never appear in any JSON response sent
+    // to the WebUI or API consumers.
+    !cfg!(feature = "kasumi")
 }
 
 fn default_moduledir() -> PathBuf {
