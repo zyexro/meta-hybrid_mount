@@ -217,8 +217,8 @@ pub fn build_kasumi_version_payload(config: &Config, state: &RuntimeState) -> Ka
 
 fn mismatch_message(status: KasumiStatus, kernel_version: Option<i32>) -> Option<String> {
     match status {
-        KasumiStatus::KernelTooOld => Some(format!(
-            "kernel protocol {} is older than userspace api{}",
+        KasumiStatus::KernelNotSupported => Some(format!(
+            "kernel protocol {} is not compatible with userspace api{}",
             kernel_version.unwrap_or_default(),
             kasumi::KSM_PROTOCOL_VERSION
         )),

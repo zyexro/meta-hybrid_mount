@@ -550,7 +550,7 @@ pub fn autoload_if_needed(config: &KasumiConfig) -> Result<bool> {
         || !config.lkm_autoload
         || is_loaded()
         || !has_module_assets(config)
-        || kasumi::check_status() == kasumi::KasumiStatus::KernelTooOld
+        || kasumi::check_status() == kasumi::KasumiStatus::KernelNotSupported
     {
         return Ok(false);
     }

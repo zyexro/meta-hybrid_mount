@@ -389,7 +389,7 @@ pub enum KasumiStatus {
     Available,
     #[default]
     NotPresent,
-    KernelTooOld,
+    KernelNotSupported,
     ModuleTooOld,
 }
 
@@ -397,7 +397,7 @@ pub fn status_name(status: KasumiStatus) -> &'static str {
     match status {
         KasumiStatus::Available => "available",
         KasumiStatus::NotPresent => "not_present",
-        KasumiStatus::KernelTooOld => "kernel_too_old",
+        KasumiStatus::KernelNotSupported => "kernel_not_supported",
         KasumiStatus::ModuleTooOld => "module_too_old",
     }
 }
@@ -477,17 +477,16 @@ fn module_loaded() -> bool {
     })
 }
 
-/// Returns `true` when the running kernel is below the minimum version required
-/// by Kasumi (5.10). Kernels before 5.10 lack necessary LSM/eBPF/io_uring
-/// infrastructure and are not supported by any prebuilt Kasumi LKM.
-fn kernel_below_minimum() -> bool {
+/// Returns `true` when the running kernel version matches one of the supported
+/// versions for which a prebuilt Kasumi LKM is available.
+fn kernel_is_supported() -> bool {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
+        const SUPPORTED: &[&str] = &["5.10", "5.15", "6.1", "6.6", "6.12"];
         let uts = unsafe {
             let mut uts = std::mem::MaybeUninit::<libc::utsname>::uninit();
             if libc::uname(uts.as_mut_ptr()) != 0 {
-                // Can't determine version – assume unsupported.
-                return true;
+                return false;
             }
             uts.assume_init()
         };
@@ -495,31 +494,25 @@ fn kernel_below_minimum() -> bool {
             .to_string_lossy()
             .into_owned();
 
-        let first_dot = match release.find('.') {
-            Some(p) => p,
-            None => return true,
-        };
-        let major: u32 = match release[..first_dot].parse() {
-            Ok(v) => v,
-            Err(_) => return true,
-        };
-        let rest = &release[first_dot + 1..];
-        let second_dot = match rest.find(|c: char| !c.is_ascii_digit()) {
-            Some(p) => p,
-            None => rest.len(),
-        };
-        let minor: u32 = match rest[..second_dot].parse() {
-            Ok(v) => v,
-            Err(_) => return true,
+        // Extract "major.minor" prefix, e.g. "5.10" from "5.10.123-something".
+        let version_prefix = match release.find('.') {
+            Some(dot1) => {
+                let rest = &release[dot1 + 1..];
+                let dot2 = rest
+                    .find(|c: char| !c.is_ascii_digit())
+                    .unwrap_or(rest.len());
+                release[..dot1 + 1 + dot2].to_string()
+            }
+            None => String::new(),
         };
 
-        major < 5 || (major == 5 && minor < 10)
+        SUPPORTED.contains(&version_prefix.as_str())
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
         // Non-Linux hosts (macOS dev, etc.) — don't gate.
-        false
+        true
     }
 }
 
@@ -757,18 +750,18 @@ pub fn check_status() -> KasumiStatus {
         return cache.status;
     }
 
-    let status = if kernel_below_minimum() {
+    let status = if !kernel_is_supported() {
         crate::scoped_log!(
             debug,
             "kasumi:status",
-            "kernel below 5.10 minimum — forcing KernelTooOld"
+            "kernel version not in supported list — forcing KernelNotSupported"
         );
-        KasumiStatus::KernelTooOld
+        KasumiStatus::KernelNotSupported
     } else if !module_loaded() {
         KasumiStatus::NotPresent
     } else {
         match get_protocol_version() {
-            Ok(version) if version < KSM_PROTOCOL_VERSION => KasumiStatus::KernelTooOld,
+            Ok(version) if version < KSM_PROTOCOL_VERSION => KasumiStatus::KernelNotSupported,
             Ok(version) if version > KSM_PROTOCOL_VERSION => KasumiStatus::ModuleTooOld,
             Ok(_) => KasumiStatus::Available,
             Err(_) => KasumiStatus::NotPresent,
