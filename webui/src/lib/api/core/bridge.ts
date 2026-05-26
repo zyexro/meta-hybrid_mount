@@ -94,7 +94,9 @@ if (hasKsuBridge()) {
   try {
     const ksu = await import("kernelsu").catch(() => null);
     ksuExec = ksu ? ksu.exec : null;
-  } catch {}
+  } catch {
+    console.debug("ksu bridge init skipped");
+  }
 }
 
 export function resolveShouldUseMock(env: MockModeEnv): boolean {

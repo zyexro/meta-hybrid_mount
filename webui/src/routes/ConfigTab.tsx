@@ -64,7 +64,9 @@ export default function ConfigTab() {
     } else if (prevSnapshot) {
       try {
         configStore.config = JSON.parse(prevSnapshot) as AppConfig;
-      } catch {}
+      } catch (e) {
+        console.warn("Failed to restore config snapshot", e);
+      }
     }
     return saved;
   }

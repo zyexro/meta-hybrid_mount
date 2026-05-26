@@ -224,13 +224,13 @@ export default function App() {
       }
       void sysStore
         .ensureStatusLoaded()
-        .catch((e: unknown) => console.debug("ensureStatusLoaded failed", e));
+        .catch((e: unknown) => console.error("ensureStatusLoaded failed", e));
       void configStore
         .loadConfig()
-        .catch((e: unknown) => console.debug("loadConfig failed", e));
+        .catch((e: unknown) => console.error("loadConfig failed", e));
       void sysStore
         .ensureVersionLoaded()
-        .catch((e: unknown) => console.debug("ensureVersionLoaded failed", e));
+        .catch((e: unknown) => console.error("ensureVersionLoaded failed", e));
       window.setTimeout(() => {
         void loadInitPayload();
       }, 0);
