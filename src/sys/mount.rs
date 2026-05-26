@@ -123,7 +123,7 @@ pub fn repair_image(image_path: &Path) -> Result<()> {
         .context("Failed to execute e2fsck")?;
 
     match status.code() {
-        Some(code) if code > 2 => {
+        Some(code) if code > 3 => {
             crate::scoped_log!(
                 error,
                 "sys:repair_image",

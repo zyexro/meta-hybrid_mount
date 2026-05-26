@@ -101,24 +101,7 @@ pub fn is_overlay_xattr_supported() -> Result<bool> {
         return Ok(true);
     }
 
-    use flate2::read::GzDecoder;
-    let file = std::fs::File::open("/proc/config.gz")?;
-
-    let mut config = String::new();
-    let mut decoder = GzDecoder::new(file);
-    decoder.read_to_string(&mut config)?;
-
-    let supported = config.lines().any(|line| {
-        if line.starts_with('#') {
-            return false;
-        }
-
-        let Some((k, v)) = line.split_once('=') else {
-            return false;
-        };
-
-        k.trim() == "CONFIG_TMPFS_XATTR" && v.trim() == "y"
-    });
+    let supported = super::check_kernel_config("CONFIG_TMPFS_XATTR")?;
 
     TMPFS_XATTR_SUPPORTED.store(supported, std::sync::atomic::Ordering::Relaxed);
 

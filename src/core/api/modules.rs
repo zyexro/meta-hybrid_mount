@@ -391,15 +391,9 @@ fn read_module_metadata(module_path: &Path, module_id: &str) -> ModuleMetadata {
 
 fn read_module_prop_limited(prop_path: &Path) -> io::Result<String> {
     let file = fs::File::open(prop_path)?;
-    let mut reader = file.take(MAX_MODULE_PROP_BYTES + 1);
+    let mut reader = file.take(MAX_MODULE_PROP_BYTES);
     let mut raw = String::new();
     reader.read_to_string(&mut raw)?;
-    if raw.len() as u64 > MAX_MODULE_PROP_BYTES {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "module.prop is too large",
-        ));
-    }
     Ok(raw)
 }
 

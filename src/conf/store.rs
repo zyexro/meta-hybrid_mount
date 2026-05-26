@@ -71,7 +71,11 @@ impl Config {
 
         ensure_parent_dir(main_path)?;
         if main_path.exists() {
-            let backup_path = main_path.with_extension("toml.bak");
+            let ext = main_path
+                .extension()
+                .map(|e| format!("{}.bak", e.to_string_lossy()))
+                .unwrap_or_else(|| "bak".to_string());
+            let backup_path = main_path.with_extension(&ext);
             fs::copy(main_path, &backup_path).with_context(|| {
                 format!(
                     "failed to create config backup at {}",

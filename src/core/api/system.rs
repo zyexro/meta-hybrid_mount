@@ -107,7 +107,7 @@ fn storage_mode_label(storage_mode: &str) -> String {
 }
 
 fn format_windows_size(bytes: u64) -> String {
-    const UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+    const UNITS: [&str; 7] = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
 
     let mut value = bytes as f64;
     let mut unit = 0;
@@ -300,8 +300,8 @@ mod tests {
     fn formats_windows_style_sizes() {
         assert_eq!(format_windows_size(0), "0 B");
         assert_eq!(format_windows_size(999), "999 B");
-        assert_eq!(format_windows_size(1024), "1 kB");
-        assert_eq!(format_windows_size(1536), "1.50 kB");
-        assert_eq!(format_windows_size(1024 * 1024), "1 MB");
+        assert_eq!(format_windows_size(1024), "1 KiB");
+        assert_eq!(format_windows_size(1536), "1.50 KiB");
+        assert_eq!(format_windows_size(1024 * 1024), "1 MiB");
     }
 }

@@ -358,7 +358,15 @@ fn mount_overlay_child(
         );
         return Err(e);
     }
-    let _ = send_umountable(mount_point);
+    if let Err(e) = send_umountable(mount_point) {
+        crate::scoped_log!(
+            warn,
+            "overlayfs",
+            "failed to register umountable at {}: {:#}",
+            mount_point,
+            e
+        );
+    }
     Ok(())
 }
 

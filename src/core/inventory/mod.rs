@@ -50,7 +50,17 @@ pub fn module_mount_mode_marker(module_path: &std::path::Path) -> Option<MountMo
 pub fn is_reserved_module_dir(id: &str) -> bool {
     matches!(
         id,
-        "hybrid-mount" | "hybrid_mount" | "lost+found" | ".git" | ".idea" | ".vscode"
+        "hybrid-mount"
+            | "hybrid_mount"
+            | "lost+found"
+            | ".git"
+            | ".github"
+            | ".hg"
+            | ".idea"
+            | ".svn"
+            | ".vscode"
+            | "__pycache__"
+            | "node_modules"
     )
 }
 

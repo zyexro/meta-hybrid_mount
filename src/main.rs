@@ -20,8 +20,9 @@ use hybrid_mount::conf::cli::Cli;
 use hybrid_mount::core;
 
 fn main() -> Result<()> {
+    #[cfg(feature = "control-plane")]
     if matches!(std::env::var("KSU_LATE_LOAD").as_deref(), Ok("1")) {
-        eprintln!("不支持Late-load（越狱）模式");
+        eprintln!("Late-load (jailbreak) mode is not supported");
         std::process::exit(1);
     }
 

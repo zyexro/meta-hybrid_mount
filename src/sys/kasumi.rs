@@ -719,14 +719,24 @@ fn list_ioctl(request: KasumiIoctlRequest, capacity: usize, description: &str) -
     ioctl_with_arg(description, request, &mut arg)
         .with_context(|| format!("failed to query Kasumi {description}"))?;
 
-    let len = buf.iter().position(|byte| *byte == 0).unwrap_or(buf.len());
+    let len = buf.iter().position(|byte| *byte == 0).unwrap_or_else(|| {
+        crate::scoped_log!(
+            warn,
+            "kasumi:list_ioctl",
+            "truncated: description={}, capacity={} (no NUL terminator found)",
+            description,
+            capacity
+        );
+        buf.len()
+    });
     let output = String::from_utf8_lossy(&buf[..len]).into_owned();
     crate::scoped_log!(
         debug,
         "kasumi:list_ioctl",
-        "complete: description={}, bytes={}",
+        "complete: description={}, bytes={}, capacity={}",
         description,
-        len
+        len,
+        capacity
     );
     Ok(output)
 }
