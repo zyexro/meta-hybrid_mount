@@ -204,7 +204,7 @@ jobs:
           REPO="${{ github.repository }}"
           TAG="${{ github.ref_name }}"
           CLEAN_VERSION="${TAG#v}"
-          VERSION_CODE=$(awk -F. '{printf "%d%02d%02d", $1, $2, $3}' <<< "$CLEAN_VERSION")
+          VERSION_CODE=$(awk -F. '{print $1 * 100000 + $2 * 1000 + $3}' <<< "$CLEAN_VERSION")
 
           FULL_NAME="${{ steps.paths.outputs.full_name }}"
           LITE_NAME="${{ steps.paths.outputs.lite_name }}"
