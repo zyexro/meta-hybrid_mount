@@ -47,5 +47,6 @@ pub struct MountPlan {
     pub kasumi_hide_rules: Vec<String>,
     pub overlay_module_ids: Vec<String>,
     pub magic_module_ids: Vec<String>,
+    #[cfg(feature = "kasumi")]
     pub kasumi_module_ids: Vec<String>,
 }

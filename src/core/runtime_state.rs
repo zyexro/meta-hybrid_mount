@@ -325,7 +325,16 @@ impl RuntimeState {
             mount_point.display(),
             result.overlay_module_ids.len(),
             result.magic_module_ids.len(),
-            result.kasumi_module_ids.len()
+            {
+                #[cfg(feature = "kasumi")]
+                {
+                    result.kasumi_module_ids.len()
+                }
+                #[cfg(not(feature = "kasumi"))]
+                {
+                    0usize
+                }
+            }
         );
 
         let previous_state = match Self::load() {
@@ -353,7 +362,16 @@ impl RuntimeState {
             mount_point.to_path_buf(),
             result.overlay_module_ids.clone(),
             result.magic_module_ids.clone(),
-            result.kasumi_module_ids.clone(),
+            {
+                #[cfg(feature = "kasumi")]
+                {
+                    result.kasumi_module_ids.clone()
+                }
+                #[cfg(not(feature = "kasumi"))]
+                {
+                    Vec::new()
+                }
+            },
             collect_active_mounts(result),
             result.mount_stats.clone(),
             collect_mode_stats(result),
@@ -432,7 +450,16 @@ fn collect_mode_stats(result: &ExecutionResult) -> ModuleModeStats {
     ModuleModeStats {
         overlayfs: result.overlay_module_ids.len(),
         magicmount: result.magic_module_ids.len(),
-        kasumi: result.kasumi_module_ids.len(),
+        kasumi: {
+            #[cfg(feature = "kasumi")]
+            {
+                result.kasumi_module_ids.len()
+            }
+            #[cfg(not(feature = "kasumi"))]
+            {
+                0usize
+            }
+        },
     }
 }
 

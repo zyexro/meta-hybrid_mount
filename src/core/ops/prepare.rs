@@ -429,6 +429,7 @@ fn prepare_mount_plan_with_root(
     let mut context = PrepareContext::new(capabilities, managed_set);
     let mut overlay_groups: BTreeMap<PathBuf, (String, Vec<PathBuf>)> = BTreeMap::new();
     let mut magic_ids = HashSet::new();
+    #[cfg(feature = "kasumi")]
     let mut kasumi_ids = HashSet::new();
 
     for module in modules {
@@ -479,6 +480,7 @@ fn prepare_mount_plan_with_root(
         if outcome.plan.magic {
             magic_ids.insert(module.id.clone());
         }
+        #[cfg(feature = "kasumi")]
         if outcome.plan.kasumi {
             kasumi_ids.insert(module.id.clone());
         }
@@ -531,6 +533,7 @@ fn prepare_mount_plan_with_root(
         kasumi_hide_rules: Vec::new(),
         overlay_module_ids: sorted_ids(overlay_module_ids),
         magic_module_ids: sorted_ids(magic_ids),
+        #[cfg(feature = "kasumi")]
         kasumi_module_ids: sorted_ids(kasumi_ids),
     };
 
@@ -541,7 +544,16 @@ fn prepare_mount_plan_with_root(
         plan.overlay_ops.len(),
         plan.overlay_module_ids.len(),
         plan.magic_module_ids.len(),
-        plan.kasumi_module_ids.len()
+        {
+            #[cfg(feature = "kasumi")]
+            {
+                plan.kasumi_module_ids.len()
+            }
+            #[cfg(not(feature = "kasumi"))]
+            {
+                0usize
+            }
+        }
     );
 
     Ok(plan)

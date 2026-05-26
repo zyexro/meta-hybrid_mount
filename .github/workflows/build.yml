@@ -62,73 +62,8 @@ jobs:
     uses: ./.github/workflows/build-kasumi-lkm.yml
     secrets: inherit
 
-  build-webui:
-    needs: build-kasumi-lkm
-    name: Build WebUI
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    container:
-      image: ghcr.io/hybrid-mount/meta-hybrid_mount-ci:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          filter: 'tree:0'
-
-      - name: Trust checkout directory
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-
-      - name: Resolve pnpm store path
-        id: pnpm-store
-        run: |
-          set -euo pipefail
-          STORE_PATH="$(pnpm store path --silent)"
-          mkdir -p "$STORE_PATH"
-          echo "path=$STORE_PATH" >> "$GITHUB_OUTPUT"
-
-      - name: Cache pnpm store
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: pnpm-${{ runner.os }}-${{ hashFiles('webui/pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-${{ runner.os }}-
-
-      - name: Build WebUI
-        working-directory: webui
-        run: |
-          set -euo pipefail
-          cat <<'EOF' > src/lib/constants_gen.ts
-          export const APP_VERSION = "dev";
-          export const IS_RELEASE = false;
-          export const ENABLE_KASUMI = true;
-          export const RUST_PATHS = {
-            CONFIG: "/data/adb/hybrid-mount/config.toml",
-            DAEMON_STATE: "/data/adb/hybrid-mount/run/daemon_state.json",
-            BINARY: "/data/adb/modules/hybrid_mount/hybrid-mount",
-          } as const;
-          EOF
-          pnpm install --frozen-lockfile
-          pnpm run build
-
-      - name: Upload WebUI artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: webui-dist
-          path: module/webroot
-          compression-level: 0
-          if-no-files-found: error
-
   build:
-    needs: [build-kasumi-lkm, build-webui]
+    needs: [build-kasumi-lkm]
     name: Build ${{ matrix.flavor }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -180,13 +115,6 @@ jobs:
           cp "${UAPI_FILES[0]}" src/sys/kasumi_uapi.h
           sha256sum src/sys/kasumi_uapi.h
 
-      - name: Download WebUI artifact
-        if: matrix.flavor != 'nano'
-        uses: actions/download-artifact@v8
-        with:
-          name: webui-dist
-          path: module/webroot
-
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
         with:
@@ -200,13 +128,7 @@ jobs:
           set -euo pipefail
           ls -la "$HYBRID_MOUNT_KASUMI_LKM_DIR" || true
           rm -rf output
-
-          skip_flag=""
-          if [ "${{ matrix.flavor }}" != "nano" ]; then
-            skip_flag="--skip-webui"
-          fi
-
-          cargo xtask build --ci --flavor ${{ matrix.flavor }} $skip_flag
+          cargo xtask build --ci --flavor ${{ matrix.flavor }}
 
           ZIP_PATH="$(find output -maxdepth 1 -type f -name '*.zip' | sort | head -n 1)"
           test -n "$ZIP_PATH"

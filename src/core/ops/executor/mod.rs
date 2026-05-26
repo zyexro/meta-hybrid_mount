@@ -38,6 +38,7 @@ pub struct ExecutionResult {
     pub overlay_module_ids: Vec<String>,
     pub overlay_partitions: Vec<String>,
     pub magic_module_ids: Vec<String>,
+    #[cfg(feature = "kasumi")]
     pub kasumi_module_ids: Vec<String>,
     pub kasumi_runtime_enabled: bool,
     pub mount_stats: MountStatistics,
@@ -61,11 +62,21 @@ impl Executor {
             "start: overlay_ops={}, preselected_magic_modules={}, preselected_kasumi_modules={}",
             plan.overlay_ops.len(),
             plan.magic_module_ids.len(),
-            plan.kasumi_module_ids.len()
+            {
+                #[cfg(feature = "kasumi")]
+                {
+                    plan.kasumi_module_ids.len()
+                }
+                #[cfg(not(feature = "kasumi"))]
+                {
+                    0usize
+                }
+            }
         );
         let mut final_magic_ids: BTreeSet<String> = plan.magic_module_ids.iter().cloned().collect();
         let mut final_overlay_ids: BTreeSet<String> = BTreeSet::new();
         let mut final_overlay_partitions: BTreeSet<String> = BTreeSet::new();
+        #[cfg(feature = "kasumi")]
         let planned_kasumi_ids = plan.kasumi_module_ids.clone();
         let mut mount_stats = MountStatistics::default();
         #[cfg(feature = "kasumi")]
@@ -90,6 +101,7 @@ impl Executor {
         };
         #[cfg(not(feature = "kasumi"))]
         let kasumi_available = false;
+        #[cfg(feature = "kasumi")]
         if !kasumi_available && !planned_kasumi_ids.is_empty() {
             return Err(ModuleStageFailure::new(
                 FailureStage::Execute,
@@ -171,6 +183,7 @@ impl Executor {
             plan.kasumi_merge_rules.clear();
             plan.kasumi_hide_rules.clear();
         }
+        #[cfg(feature = "kasumi")]
         let final_kasumi_ids = plan.kasumi_module_ids.clone();
 
         let magic_need_list: Vec<String> = final_magic_ids.iter().cloned().collect();
@@ -246,13 +259,23 @@ impl Executor {
             "complete: overlay_modules={}, magic_modules={}, kasumi_modules={}",
             result_overlay.len(),
             result_magic.len(),
-            final_kasumi_ids.len()
+            {
+                #[cfg(feature = "kasumi")]
+                {
+                    final_kasumi_ids.len()
+                }
+                #[cfg(not(feature = "kasumi"))]
+                {
+                    0usize
+                }
+            }
         );
 
         Ok(ExecutionResult {
             overlay_module_ids: result_overlay,
             overlay_partitions: final_overlay_partitions.into_iter().collect(),
             magic_module_ids: result_magic,
+            #[cfg(feature = "kasumi")]
             kasumi_module_ids: final_kasumi_ids,
             kasumi_runtime_enabled,
             mount_stats,

@@ -38,7 +38,16 @@ pub fn finalize(
         mount_point.display(),
         result.overlay_module_ids.len(),
         result.magic_module_ids.len(),
-        result.kasumi_module_ids.len()
+        {
+            #[cfg(feature = "kasumi")]
+            {
+                result.kasumi_module_ids.len()
+            }
+            #[cfg(not(feature = "kasumi"))]
+            {
+                0usize
+            }
+        }
     );
 
     module_status::update_description(
@@ -46,7 +55,16 @@ pub fn finalize(
         config.kasumi.enabled,
         result.overlay_module_ids.len(),
         result.magic_module_ids.len(),
-        result.kasumi_module_ids.len(),
+        {
+            #[cfg(feature = "kasumi")]
+            {
+                result.kasumi_module_ids.len()
+            }
+            #[cfg(not(feature = "kasumi"))]
+            {
+                0usize
+            }
+        },
     );
 
     let state = RuntimeState::build_from_execution(config, storage_mode, mount_point, result);
