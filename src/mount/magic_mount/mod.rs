@@ -288,16 +288,16 @@ impl MagicMount {
         })?;
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
-        if self.umount {
-            if let Err(e) = send_umountable(target) {
-                crate::scoped_log!(
-                    warn,
-                    "magic",
-                    "failed to register umountable at {}: {:#}",
-                    target.display(),
-                    e
-                );
-            }
+        if self.umount
+            && let Err(e) = send_umountable(target)
+        {
+            crate::scoped_log!(
+                warn,
+                "magic",
+                "failed to register umountable at {}: {:#}",
+                target.display(),
+                e
+            );
         }
 
         try_remount_readonly(target, target);
@@ -433,16 +433,16 @@ impl MagicMount {
             }
 
             #[cfg(any(target_os = "linux", target_os = "android"))]
-            if self.umount {
-                if let Err(e) = send_umountable(&self.path) {
-                    crate::scoped_log!(
-                        warn,
-                        "magic",
-                        "failed to register umountable at {}: {:#}",
-                        self.path.display(),
-                        e
-                    );
-                }
+            if self.umount
+                && let Err(e) = send_umountable(&self.path)
+            {
+                crate::scoped_log!(
+                    warn,
+                    "magic",
+                    "failed to register umountable at {}: {:#}",
+                    self.path.display(),
+                    e
+                );
             }
             context.stats.record_dir();
         }
