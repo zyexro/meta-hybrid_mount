@@ -92,7 +92,7 @@ macro_rules! impl_zeroed_default {
     ($t:ty) => {
         impl Default for $t {
             fn default() -> Self {
-                unsafe { std::mem::zeroed() }
+                unsafe { std::mem::MaybeUninit::zeroed().assume_init() }
             }
         }
     };

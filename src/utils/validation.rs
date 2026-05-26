@@ -61,9 +61,7 @@ pub fn extract_module_id(path: &Path) -> Option<String> {
         }
     }
 
-    path.parent()
-        .and_then(|p| p.file_name())
-        .map(|s| s.to_string_lossy().into_owned())
+    None
 }
 
 #[cfg(test)]
@@ -101,13 +99,13 @@ mod tests {
     }
 
     #[test]
-    fn extract_fallback_to_parent() {
+    fn extract_returns_none_without_module_prop() {
         let tmp = TempDir::new().unwrap();
         let module_dir = tmp.path().join("fallback_mod");
         fs::create_dir_all(module_dir.join("sub/dir")).unwrap();
-        // no module.prop anywhere — falls back to path's parent name
+        // no module.prop anywhere — can't determine module ID
         let id = extract_module_id(&module_dir.join("sub/dir/leaf"));
-        assert_eq!(id.as_deref(), Some("dir"));
+        assert_eq!(id, None);
     }
 
     #[test]

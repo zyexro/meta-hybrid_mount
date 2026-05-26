@@ -67,6 +67,7 @@ pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, content: C) -> Resu
         })?;
 
     tempfile.write_all(content.as_ref())?;
+    tempfile.flush()?;
 
     tempfile
         .persist(path)

@@ -285,6 +285,8 @@ fn load_module_via_init(ko_path: &Path, params: &str) -> Result<()> {
     let mut image = Vec::new();
     file.read_to_end(&mut image)
         .with_context(|| format!("failed to read module {}", ko_path.display()))?;
+    // params is always an empty string for the current callers; validation
+    // exists in case module params are added as a config-driven feature later.
     let params = CString::new(params).context("module params contain interior NUL")?;
 
     let ret = unsafe {
@@ -316,6 +318,7 @@ fn load_module_via_init(_ko_path: &Path, _params: &str) -> Result<()> {
 fn load_module_via_finit(ko_path: &Path, params: &str) -> Result<()> {
     let file = fs::File::open(ko_path)
         .with_context(|| format!("failed to open module {}", ko_path.display()))?;
+    // Same empty-params invariant as load_module_via_init above.
     let params = CString::new(params).context("module params contain interior NUL")?;
 
     let ret = unsafe { libc::syscall(SYS_FINIT_MODULE_NUM, file.as_raw_fd(), params.as_ptr(), 0) };
