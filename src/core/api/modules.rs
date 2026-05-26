@@ -19,7 +19,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -217,6 +217,23 @@ pub fn apply_modules_payload(
     let mut config = Config::load_optional_from_file(config_path)?;
 
     for module in modules {
+        utils::validation::validate_module_id(&module.id)?;
+        if let Some(ref sp) = module.source_path {
+            let canonical_sp = sp
+                .canonicalize()
+                .with_context(|| format!("failed to canonicalize source_path {}", sp.display()))?;
+            let canonical_moduledir = config
+                .moduledir
+                .canonicalize()
+                .unwrap_or_else(|_| config.moduledir.clone());
+            if !canonical_sp.starts_with(&canonical_moduledir) {
+                bail!(
+                    "source_path '{}' is outside moduledir '{}'",
+                    sp.display(),
+                    config.moduledir.display()
+                );
+            }
+        }
         let module_path = module
             .source_path
             .clone()

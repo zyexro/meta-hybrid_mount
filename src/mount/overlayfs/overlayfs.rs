@@ -27,7 +27,7 @@ use procfs::process::Process;
 use rustix::{
     fd::AsFd,
     fs::CWD,
-    mount::{MountFlags, MoveMountFlags, mount, move_mount},
+    mount::{MountFlags, MoveMountFlags, UnmountFlags, mount, move_mount, unmount as umount2},
 };
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
@@ -172,6 +172,7 @@ pub fn mount_overlayfs(
 ) -> Result<()> {
     let mut current_layers: Vec<String> = lower_dirs.to_vec();
     current_layers.push(lowest.to_string());
+    let mut staging_dirs: Vec<PathBuf> = Vec::new();
 
     while current_layers.len() > MAX_LAYERS {
         let split_idx = current_layers.len().saturating_sub(MAX_LAYERS - 1);
@@ -191,18 +192,47 @@ pub fn mount_overlayfs(
 
         mount_overlay_core(&bottom_chunk, None, None, &staging_dir, mount_source)?;
 
-        let _ = send_umountable(&staging_dir);
-
+        // Staging dirs are temporary and self-cleaned below — do NOT
+        // register them with KSU's global umount list.
+        staging_dirs.push(staging_dir.clone());
         current_layers.push(staging_dir.to_string_lossy().into_owned());
     }
 
-    mount_overlay_core(
+    let result = mount_overlay_core(
         &current_layers,
         upperdir.as_deref(),
         workdir.as_deref(),
         dest.as_ref(),
         mount_source,
-    )
+    );
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        // Clean up staging overlay mounts. Use MNT_DETACH so the final overlay
+        // can keep its references to the merged lower layers alive until unmounted.
+        for staging_dir in staging_dirs.iter().rev() {
+            if let Err(e) = umount2(staging_dir.as_path(), UnmountFlags::DETACH) {
+                crate::scoped_log!(
+                    warn,
+                    "overlayfs",
+                    "failed to detach staging overlay {}: {:#}",
+                    staging_dir.display(),
+                    e
+                );
+            }
+            if let Err(e) = std::fs::remove_dir(staging_dir) {
+                crate::scoped_log!(
+                    debug,
+                    "overlayfs",
+                    "failed to remove staging dir {}: {:#}",
+                    staging_dir.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    result
 }
 
 pub fn bind_mount(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
