@@ -19,10 +19,10 @@ pub use file::*;
 pub use xattr::*;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub fn check_kernel_config(key: &str) -> Result<bool> {
+pub fn check_kernel_config(key: &str) -> anyhow::Result<bool> {
     use std::{fs, io::Read};
 
-    use anyhow::{Context, Result};
+    use anyhow::Context;
     use flate2::read::GzDecoder;
 
     let file =

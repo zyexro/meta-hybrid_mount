@@ -152,8 +152,9 @@ where
         fsconfig_set_string(fs, "workdir", workdir)
             .with_context(|| format!("Failed to fsconfig set string workdir with {workdir}"))?;
     }
-    fsconfig_set_string(fs, "source", source.to_string())
-        .with_context(|| format!("Failed to fsconfig set string source with {source}"))?;
+    let source_s = source.to_string();
+    fsconfig_set_string(fs, "source", &source_s)
+        .with_context(|| format!("Failed to fsconfig set string source with {source_s}"))?;
     fsconfig_create(fs).context("Failed to fsconfig create new fs")?;
     let mount = fsmount(fs, FsMountFlags::FSMOUNT_CLOEXEC, MountAttrFlags::empty())
         .context("Failed to mount")?;

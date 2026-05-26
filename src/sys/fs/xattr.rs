@@ -17,7 +17,7 @@ use std::path::Path;
     feature = "control-plane",
     any(target_os = "linux", target_os = "android")
 ))]
-use std::{io::Read, sync::atomic::AtomicBool};
+use std::sync::atomic::AtomicBool;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use anyhow::Context;
