@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for AI coding agents working in this repo. Read this **before** editing or running anything. For user-facing feature docs, see `README.md` (also `README_ZH.md` / `README_JP.md`). This file covers the things that are easy to get wrong.
+Guidance for AI coding agents working in this repo. Read this **before** editing or running anything. For user-facing feature docs, see `docs/README.md` (also `docs/README_ZH.md` / `docs/README_JP.md`). This file covers the things that are easy to get wrong.
 
 ## What this project is
 

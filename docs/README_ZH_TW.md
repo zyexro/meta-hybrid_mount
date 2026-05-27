@@ -18,7 +18,7 @@ Hybrid Mount 是面向 **KernelSU** 與 **APatch** 的掛載編排元模組。
 
 發行套件分為三種版本。除非另有說明，本文預設描述 `full` 版本。
 
-**[English](README.md)** &nbsp; **[简体中文](README_ZH.md)** &nbsp; **[繁體中文](README_ZH_TW.md)** &nbsp; **[日本語](README_JP.md)** &nbsp; **[Español](README_ES.md)** &nbsp; **[Italiano](README_IT.md)** &nbsp; **[Русский](README_RU.md)** &nbsp; **[Українська](README_UK.md)** &nbsp; **[Tiếng Việt](README_VI.md)**
+**[English](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README.md)** &nbsp; **[简体中文](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_ZH.md)** &nbsp; **[繁體中文](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_ZH_TW.md)** &nbsp; **[日本語](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_JP.md)** &nbsp; **[Español](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_ES.md)** &nbsp; **[Italiano](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_IT.md)** &nbsp; **[Русский](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_RU.md)** &nbsp; **[Українська](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_UK.md)** &nbsp; **[Tiếng Việt](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_VI.md)**
 
 ---
 
@@ -161,7 +161,7 @@ WebUI 目前提供以下 locale：
 - 简体中文 (`zh-CN`)
 - 繁體中文 (`zh-TW`)
 
-README 文件提供 [English](README.md)、[简体中文](README_ZH.md)、[繁體中文](README_ZH_TW.md)、[日本語](README_JP.md)、[Español](README_ES.md)、[Italiano](README_IT.md)、[Русский](README_RU.md)、[Українська](README_UK.md) 與 [Tiếng Việt](README_VI.md) 版本。
+README 文件提供 [English](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README.md)、[简体中文](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_ZH.md)、[繁體中文](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_ZH_TW.md)、[日本語](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_JP.md)、[Español](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_ES.md)、[Italiano](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_IT.md)、[Русский](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_RU.md)、[Українська](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_UK.md) 與 [Tiếng Việt](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/docs/README_VI.md) 版本。
 
 ---
 
@@ -280,4 +280,4 @@ cargo +nightly test
 
 ## 授權
 
-本專案採用 [Apache-2.0](LICENSE) 授權。
+本專案採用 [Apache-2.0](https://github.com/Hybrid-Mount/meta-hybrid_mount/blob/main/LICENSE) 授權。
