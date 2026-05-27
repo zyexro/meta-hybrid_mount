@@ -90,7 +90,7 @@ fn mount_overlay_base(op: &OverlayOperation, config: &config::Config) -> Result<
 
     let mut mount_source = config.mountsource.clone();
 
-    if defs::IGNORE_UNMOUNT_PARTITIONS
+    if defs::IGNORE_UMOUNT_PARTITIONS
         .iter()
         .any(|s| s.trim() == op.target.trim())
     {

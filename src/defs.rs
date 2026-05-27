@@ -42,7 +42,7 @@ pub const REPLACE_DIR_FILE_NAME: &str = ".replace";
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub const REPLACE_DIR_XATTR: &str = "trusted.overlay.opaque";
 
-pub const IGNORE_UNMOUNT_PARTITIONS: &[&str] = &[
+pub const IGNORE_UMOUNT_PARTITIONS: &[&str] = &[
     "/vendor/lib",
     "/vendor/lib64",
     "/system/lib",
