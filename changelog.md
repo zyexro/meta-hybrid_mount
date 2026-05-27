@@ -1,4 +1,82 @@
 
+## v4.1.3
+
+
+### <!-- 1 --> Features
+
+- Update build and release workflows, remove WebUI build steps, and enhance kasumi feature handling
+
+- Enhance module validation and improve overlayfs staging cleanup
+
+- Enhance backup path handling, improve error logging, and update kernel config checks
+
+- Enhance Kasumi feature support with kernel compatibility checks
+
+- Add tmpfs xattr support checks and enhance Kasumi status handling
+
+- Implement module blacklist functionality and enhance module handling
+
+- Suggest ignore mode when mount_error modules contain shell mount commands Scan .sh files in modules with mount errors for mount/mkdir/touch/bind commands and display a hint in the WebUI suggesting the user set the module to "ignore" mode to avoid conflicts.
+
+- Add issue template for module blacklist requests and implement auto PR creation workflow
+
+
+
+### <!-- 2 --> Fixes
+
+- Update kernel status checks to reflect compatibility changes
+
+- Enhance kasumi feature handling and update version in Cargo.toml
+
+- `Kasumi` Fix redirecting and hiding This is a empty commit to get the latest kasumi ko
+
+- Update version code calculation in release workflow
+
+- Improve error logging for status loading, config loading, and ksu bridge initialization
+
+- Make cargo clippy happy
+
+- Make cargo clippy happy again
+
+- Correct typo in partition ignore constants
+
+
+
+### <!-- 4 --> Refactors
+
+- Clean up dead code, improve mount point collection, and enhance logging initialization
+
+- Simplify mode retrieval and enhance module display logic
+
+
+
+### <!-- 5 --> Documentation
+
+- Add AGENTS.md guide for AI coding agents
+
+- Update README files to include Cargo features and CI checks for all flavors
+
+- Move README files to docs/ and use absolute URLs Move all 9 language README variants into docs/ directory. Replace all cross-file relative links with absolute GitHub URLs to ensure links work correctly from any context. Update Cargo.toml and AGENTS.md to reflect the new paths. Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+
+
+
+### <!-- 7 --> CI / Tooling
+
+- Only auto-close bug reports missing attachments, add URL detection
+
+
+
+### <!-- 9 --> Other
+
+- Add files via upload Indonesian Language
+
+- Add Indonesian to language selector (#336) ### Motivation - The WebUI included a locale file `webui/src/locales/id-ID.json` but `id-ID` was not present in the `availableLanguages` list, so Bahasa Indonesia could not be chosen in the language dialog. ### Description - Inserted `{ code: "id-ID", name: "Bahasa Indonesia" }` into the `availableLanguages` array in `webui/src/lib/stores/uiStore.ts` so the Indonesian locale becomes selectable. ### Testing - Verified the change and locale presence using `git diff -- webui/src/lib/stores/uiStore.ts` and `nl -ba webui/src/locales/id-ID.json`, then committed the update with `git commit` (commands succeeded). ------ [Codex Task](https://chatgpt.com/codex/cloud/tasks/task_e_6a165edc5b2c8325bac2b9c862af1ab8)
+
+- Update api.mock.ts to suit new feature
+
+
+
+
 ## v4.1.2
 
 
