@@ -51,15 +51,15 @@ Los paquetes se publican en tres variantes. Salvo que se indique lo contrario, e
 
 ### Full
 
-La variante `full` incluye todos los backends soportados (OverlayFS, Magic Mount y Kasumi), la WebUI en SolidJS, el daemon con Unix socket y HTTP/SSE, la CLI y los recursos Kasumi LKM.
+La variante `full` incluye todos los backends soportados (OverlayFS, Magic Mount y Kasumi), la WebUI en SolidJS, el daemon con Unix socket y HTTP/SSE, la CLI y los recursos Kasumi LKM. Construido con Cargo features `kasumi` (que implica `control-plane`).
 
 ### Lite
 
-La variante `lite` elimina Kasumi LKM y las funciones relacionadas con Kasumi, pero conserva WebUI, daemon, CLI, OverlayFS y Magic Mount. Es adecuada cuando el kernel no carga LKMs externos o cuando no se necesitan capacidades runtime de hide/spoof.
+La variante `lite` (`--no-default-features --features control-plane`) elimina Kasumi LKM y las funciones relacionadas con Kasumi, pero conserva WebUI, daemon, CLI, OverlayFS y Magic Mount. Es adecuada cuando el kernel no carga LKMs externos o cuando no se necesitan capacidades runtime de hide/spoof.
 
 ### Nano
 
-La variante `nano` funciona solo mediante configuración. Elimina WebUI, daemon, CLI e infraestructura de control; conserva un binario reducido que lee `config.toml`, genera un plan de montaje, lo ejecuta y termina.
+La variante `nano` (`--no-default-features`, sin Cargo features) funciona solo mediante configuración. Elimina WebUI, daemon, CLI e infraestructura de control; conserva un binario reducido que lee `config.toml`, genera un plan de montaje, lo ejecuta y termina.
 
 Nano usa `magic` como modo predeterminado. Durante la instalación, la selección con teclas de volumen escribe marcadores vacíos `overlay` o `magic` en la raíz de cada módulo gestionado. Los nombres de marcadores se comparan sin distinguir mayúsculas y minúsculas.
 
@@ -76,6 +76,8 @@ Nano usa `magic` como modo predeterminado. Durante la instalación, la selecció
 | Caché de configuración y aplicación runtime | Sí | Sí | No |
 | Kasumi hide/spoof/stealth | Sí | No | No |
 | Autocarga de LKM | Sí | No | No |
+| Cargo features | `kasumi` (implica `control-plane`) | solo `control-plane` | ninguno |
+| Tamaño ZIP (aprox.) | ~4 MB | ~2 MB | ~1 MB |
 
 ## Características
 
@@ -223,7 +225,7 @@ Subcomandos comunes:
 
 ## Arquitectura
 
-Hybrid Mount lee `config.toml`, descubre el inventario de módulos, genera un plan de montaje según reglas de ruta, módulo y globales, y ejecuta el plan mediante OverlayFS, Magic Mount o Kasumi. Las variantes Full/Lite persisten el estado runtime y lo exponen a WebUI y CLI mediante el daemon.
+Hybrid Mount lee `config.toml`, descubre el inventario de módulos, genera un plan de montaje según reglas de ruta, módulo y globales, y ejecuta el plan mediante OverlayFS, Magic Mount o Kasumi. El ejecutor se basa en una **máquina de estados tipada** (`src/core/controller.rs`): `MountController<Init> → StorageReady → Planned → Executed`. Cada transición representa una etapa del pipeline. Las variantes Full/Lite persisten el estado runtime y lo exponen a WebUI y CLI mediante el daemon.
 
 Directorios principales:
 
@@ -254,6 +256,10 @@ cargo run -p xtask -- build --release --skip-webui
 cargo run -p xtask -- lint
 cargo +nightly test
 ```
+
+### Puertas CI y linting de feature flags
+
+Cada cambio debe pasar: `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all-targets --workspace`, WebUI `pnpm lint` + `pnpm test`, y verificación de encabezado de licencia. `cargo clippy --all-features` solo verifica el sabor `full`; verifica también que **lite** (`--no-default-features --features control-plane`) y **nano** (`--no-default-features`) compilen. El código de Kasumi debe estar tras `#[cfg(feature = "kasumi")]`; el código del daemon/CLI/WebUI tras `#[cfg(feature = "control-plane")]`.
 
 ---
 

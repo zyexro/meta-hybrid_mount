@@ -53,7 +53,7 @@ Hybrid Mount is released in three flavors, each targeting a different use case:
 
 ### Full
 
-The `full` flavor includes all supported mount backends (OverlayFS, Magic Mount, Kasumi), the SolidJS WebUI, the Unix-socket daemon with HTTP/SSE, the CLI, and the Kasumi LKM assets. Use Full when Kasumi-backed routing or auxiliary hide/spoof features are required.
+The `full` flavor includes all supported mount backends (OverlayFS, Magic Mount, Kasumi), the SolidJS WebUI, the Unix-socket daemon with HTTP/SSE, the CLI, and the Kasumi LKM assets. Use Full when Kasumi-backed routing or auxiliary hide/spoof features are required. Built with Cargo features `kasumi` (which implies `control-plane`).
 
 ### Lite
 
@@ -63,11 +63,11 @@ The `lite` flavor strips the Kasumi LKM and all Kasumi-related features (hide, s
 - You don't need runtime hide/spoof capabilities.
 - You want a smaller download while keeping the WebUI and daemon management interface.
 
-Lite builds use the feature set `control-plane` (no `kasumi`). The WebUI's Kasumi panel is hidden automatically.
+Lite builds use the feature set `control-plane` only (`--no-default-features --features control-plane`). The WebUI's Kasumi panel is hidden automatically.
 
 ### Nano
 
-The `nano` flavor is a **config-only** build. It strips the WebUI, daemon, CLI, and all control-plane infrastructure. What remains is a minimal binary that reads `config.toml`, generates a mount plan, and executes it — then exits. Key characteristics:
+The `nano` flavor is a **config-only** build (`--no-default-features` — no Cargo features enabled). It strips the WebUI, daemon, CLI, and all control-plane infrastructure. What remains is a minimal binary that reads `config.toml`, generates a mount plan, and executes it — then exits. Key characteristics:
 
 - **No runtime daemon** — no background process, no socket, no WebUI, no CLI subcommands.
 - **No WebUI** — the `webroot/`, `launcher.png`, and `service.sh` assets are removed from the package.
@@ -91,6 +91,7 @@ Choose Nano if you want predictable, daemon-free mount orchestration with a smal
 | Config caching & runtime apply | Yes | Yes | No |
 | Kasumi hide/spoof/stealth | Yes | No | No |
 | LKM autoload | Yes | No | No |
+| Cargo features | `kasumi` (implies `control-plane`) | `control-plane` only | none |
 | ZIP size (approx.) | ~4 MB | ~2 MB | ~1 MB |
 
 ## Features
@@ -430,6 +431,8 @@ hybrid-mount [OPTIONS] [COMMAND]
 └─────────────────────────────────────────────┘
 ```
 
+The executor is driven by a **typestate state machine** (`src/core/controller.rs`): `MountController<Init> → StorageReady → Planned → Executed`. Each transition represents one pipeline stage, ensuring the mount process is always in a well-defined state.
+
 ### Source layout
 
 ```text
@@ -515,6 +518,18 @@ cd webui && pnpm test
 ### Release profile
 
 The release profile uses `opt-level = 3`, `lto = "fat"`, `codegen-units = 1`, `strip = true`, and `panic = "abort"` to reduce binary size.
+
+### CI gates and feature flag linting
+
+Every change must pass the following CI checks (defined in `.github/workflows/`):
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --all-targets -- -D warnings` (warnings are errors)
+- `cargo test --all-targets --workspace`
+- WebUI: `pnpm lint` + `pnpm test`
+- License header check on all source files
+
+`cargo clippy --all-features` (what `xtask lint` runs) only checks the `full` flavor. When making changes, also verify that the **lite** (`--no-default-features --features control-plane`) and **nano** (`--no-default-features`) flavor combinations compile. Code touching Kasumi must be behind `#[cfg(feature = "kasumi")]`; code touching the daemon/CLI/WebUI API must be behind `#[cfg(feature = "control-plane")]`.
 
 ---
 
