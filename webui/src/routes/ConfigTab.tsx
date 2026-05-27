@@ -8,6 +8,8 @@ import { ENABLE_KASUMI } from "../lib/constants_gen";
 import { features } from "../lib/features";
 import { getCookie, setCookie } from "../lib/cookies";
 import { getErrorMessage } from "../lib/api/core/error";
+import { API } from "../lib/api";
+import { kasumiStore } from "../lib/stores/kasumiStore";
 import "./ConfigTab.css";
 import "@material/web/textfield/outlined-text-field.js";
 import "@material/web/icon/icon.js";
@@ -27,6 +29,9 @@ export default function ConfigTab() {
   const isValidPath = (p: string) => !p || (p.startsWith("/") && p.length > 1);
   const invalidModuleDir = createMemo(
     () => !isValidPath(configStore.config.moduledir),
+  );
+  const tmpfsXattrUnsupported = createMemo(
+    () => sysStore.systemInfo?.tmpfs_xattr_supported === false,
   );
 
   createEffect(() => {
@@ -121,13 +126,9 @@ export default function ConfigTab() {
     setShowKasumiWarning(false);
     setKasumiPending(true);
     try {
-      const [{ API }, { kasumiStore }] = await Promise.all([
-        import("../lib/api"),
-        import("../lib/stores/kasumiStore"),
-      ]);
       await API.setKasumiEnabled(enabled);
       kasumiStore.setEnabledOptimistic(enabled);
-      void kasumiStore.refreshStatus(false);
+      await kasumiStore.refreshStatus(false);
       features.setKasumiStatus(
         kasumiStore.enabled,
         Boolean(kasumiStore.status?.available),
@@ -440,6 +441,19 @@ export default function ConfigTab() {
                 </div>
               </button>
             </div>
+            <Show when={tmpfsXattrUnsupported()}>
+              <div class="kasumi-restriction-note">
+                <md-icon>
+                  <svg viewBox="0 0 24 24">
+                    <path d={ICONS.info} />
+                  </svg>
+                </md-icon>
+                <span>
+                  {uiStore.L.config?.kasumiTmpfsRestriction ??
+                    "Per-module Kasumi mount is unavailable because tmpfs xattr is not supported on this kernel."}
+                </span>
+              </div>
+            </Show>
           </section>
         </Show>
       </div>

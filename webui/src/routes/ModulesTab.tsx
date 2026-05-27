@@ -10,6 +10,7 @@ import {
 } from "solid-js";
 import { uiStore } from "../lib/stores/uiStore";
 import { moduleStore } from "../lib/stores/moduleStore";
+import { sysStore } from "../lib/stores/sysStore";
 import { ICONS } from "../lib/constants";
 import { ENABLE_KASUMI } from "../lib/constants_gen";
 import { features } from "../lib/features";
@@ -61,7 +62,12 @@ export default function ModulesTab() {
   const kasumiAvailable = createMemo(
     () => ENABLE_KASUMI && features.kasumiAvailable,
   );
-  const showKasumiStrategy = createMemo(() => kasumiMasterEnabled());
+  const tmpfsXattrUnsupported = createMemo(
+    () => sysStore.systemInfo?.tmpfs_xattr_supported === false,
+  );
+  const showKasumiStrategy = createMemo(
+    () => kasumiMasterEnabled() && !tmpfsXattrUnsupported(),
+  );
 
   createEffect(() => {
     if (!showKasumiStrategy() && filterType() === "kasumi") {

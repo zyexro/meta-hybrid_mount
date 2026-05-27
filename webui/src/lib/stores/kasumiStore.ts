@@ -72,7 +72,25 @@ const createKasumiStore = () => {
 
   function setEnabledOptimistic(enabled: boolean) {
     const current = status();
-    if (!current) return;
+    if (!current) {
+      setStatus({
+        status: "unknown",
+        available: false,
+        kernel_supported: false,
+        protocol_version: null,
+        feature_names: [],
+        hooks: [],
+        rule_count: 0,
+        user_hide_rule_count: 0,
+        mirror_path: "/dev/kasumi_mirror",
+        lkm: { loaded: false, autoload: false, kmi_override: "" },
+        config: { ...DEFAULT_CONFIG.kasumi, enabled },
+        runtime: { snapshot: {}, kasumi_modules: [] },
+      });
+      hasLoaded = true;
+      lastLoadedAt = Date.now();
+      return;
+    }
     setStatus({
       ...current,
       config: {

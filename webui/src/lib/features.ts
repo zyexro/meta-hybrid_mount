@@ -25,7 +25,7 @@ const createFeatures = () => {
       kernelSupported: boolean,
     ) {
       if (!ENABLE_KASUMI) return;
-      setKasumiEnabled(enabled && available);
+      setKasumiEnabled(enabled);
       setKasumiAvailable(available);
       setKasumiKernelSupported(kernelSupported);
     },
