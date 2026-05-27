@@ -101,7 +101,8 @@
     "mountError": "Ошибка монтирования",
     "clearMountErrors": "Очистить ошибки",
     "mountErrorsCleared": "Ошибки очищены",
-    "mountErrorsClearFailed": "Не удалось очистить ошибки"
+    "mountErrorsClearFailed": "Не удалось очистить ошибки",
+    "suggestIgnoreHint": "Этот модуль содержит команды монтирования в своих .sh файлах. Рассмотрите установку режима \"Ignore\"."
   },
   "kasumi": {
     "title": "Состояние Kasumi",

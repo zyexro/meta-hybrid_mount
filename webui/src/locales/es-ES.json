@@ -101,7 +101,8 @@
     "mountError": "Error de montaje",
     "clearMountErrors": "Limpiar errores",
     "mountErrorsCleared": "Errores limpiados",
-    "mountErrorsClearFailed": "Error al limpiar errores"
+    "mountErrorsClearFailed": "Error al limpiar errores",
+    "suggestIgnoreHint": "Este módulo contiene comandos de montaje en sus archivos .sh. Considere establecer su modo en \"Ignorar\"."
   },
   "kasumi": {
     "title": "Estado de Kasumi",

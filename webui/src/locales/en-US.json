@@ -99,6 +99,7 @@
     "unavailableTag": "Unavailable",
     "kasumiUnavailableHint": "Kasumi is enabled but not currently available.",
     "mountError": "Mount Error",
+    "suggestIgnoreHint": "This module contains mount-related commands in its .sh files. Consider setting its mode to 'Ignore'.",
     "clearMountErrors": "Clear Mount Errors",
     "mountErrorsCleared": "Mount errors cleared",
     "mountErrorsClearFailed": "Failed to clear mount errors"

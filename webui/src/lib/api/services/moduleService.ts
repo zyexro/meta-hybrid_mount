@@ -12,6 +12,7 @@ interface ModuleRuntimeEntry {
   source_path?: string;
   rules: ModuleRules;
   mount_error?: string;
+  suggest_ignore?: boolean;
 }
 
 interface ModuleMetadata {
@@ -49,6 +50,9 @@ function normalizeModuleRuntimeEntry(value: unknown): ModuleRuntimeEntry {
       isString(payload.mount_error) && payload.mount_error.trim()
         ? payload.mount_error
         : undefined,
+    suggest_ignore: isBoolean(payload.suggest_ignore)
+      ? payload.suggest_ignore
+      : undefined,
   };
 }
 
@@ -104,6 +108,7 @@ function toModule(entry: ModuleRuntimeEntry, metadata: ModuleMetadata): Module {
     source_path: entry.source_path,
     rules: entry.rules,
     mount_error: entry.mount_error,
+    suggest_ignore: entry.suggest_ignore,
   };
 }
 

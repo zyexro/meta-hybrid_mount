@@ -40,6 +40,12 @@ pub struct ModuleListEntry {
     pub rules: ModuleRules,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mount_error: Option<String>,
+    #[serde(skip_serializing_if = "is_false")]
+    pub suggest_ignore: bool,
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +143,7 @@ fn build_scanned_modules_payload(
         } else {
             mount_error_reason(&runtime_index, &id, &module_path)
         };
+        let suggest_ignore = mount_error.is_some() && has_suspicious_shell_commands(&module_path);
 
         modules.push(ModuleListEntry {
             id,
@@ -146,6 +153,7 @@ fn build_scanned_modules_payload(
             source_path: module_path,
             rules,
             mount_error,
+            suggest_ignore,
         });
     }
 
@@ -190,6 +198,8 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
             } else {
                 mount_error_reason(&runtime_index, &id, &source_path)
             };
+            let suggest_ignore =
+                mount_error.is_some() && has_suspicious_shell_commands(&source_path);
 
             ModuleListEntry {
                 id,
@@ -199,6 +209,7 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
                 source_path,
                 rules,
                 mount_error,
+                suggest_ignore,
             }
         })
         .collect()
@@ -234,6 +245,77 @@ fn mount_error_reason(
         utils::dir_contains_entry_case_insensitive(module_path, defs::MOUNT_ERROR_FILE_NAME)
             .then(|| "mount_error marker present".to_string())
     })
+}
+
+/// Scans .sh files in the module directory for shell commands that suggest the
+/// module performs its own mount operations (mount, bind mount, mkdir, touch).
+/// When true, the user should consider setting the module to "ignore" mode
+/// because Hybrid Mount cannot manage modules that do their own mounting.
+const MAX_SH_SCAN_BYTES: u64 = 256 * 1024;
+
+fn has_suspicious_shell_commands(module_path: &Path) -> bool {
+    let Ok(entries) = fs::read_dir(module_path) else {
+        return false;
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(ext) = path.extension() else {
+            continue;
+        };
+        if !ext.eq_ignore_ascii_case("sh") {
+            continue;
+        }
+
+        let Ok(meta) = path.metadata() else {
+            continue;
+        };
+        if !meta.is_file() || meta.len() > MAX_SH_SCAN_BYTES {
+            continue;
+        }
+
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+
+        if contains_mount_commands(&content) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn contains_mount_commands(content: &str) -> bool {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+
+        let first_word = trimmed
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .trim_start_matches(['\\', '`']);
+
+        match first_word {
+            "mount" | "mkdir" | "touch" => return true,
+            "busybox" => {
+                let rest = &trimmed[first_word.len()..].trim_start();
+                let sub_cmd = rest.split_whitespace().next().unwrap_or("");
+                if matches!(sub_cmd, "mount" | "mkdir" | "touch") {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+
+        if first_word.contains("mount") || first_word.contains("bind") {
+            return true;
+        }
+    }
+    false
 }
 
 pub fn apply_modules_payload(

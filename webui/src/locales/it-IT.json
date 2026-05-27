@@ -101,7 +101,8 @@
     "mountError": "Errore di mount",
     "clearMountErrors": "Cancella errori",
     "mountErrorsCleared": "Errori cancellati",
-    "mountErrorsClearFailed": "Cancellazione errori fallita"
+    "mountErrorsClearFailed": "Cancellazione errori fallita",
+    "suggestIgnoreHint": "Questo modulo contiene comandi di mount nei suoi file .sh. Considera di impostare la modalità su \"Ignora\"."
   },
   "kasumi": {
     "title": "Runtime Kasumi",

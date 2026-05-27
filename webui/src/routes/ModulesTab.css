@@ -249,8 +249,23 @@
   opacity: 0.8;
 }
 
+.error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .error-text {
   word-break: break-word;
+}
+
+.suggest-ignore-hint {
+  font-size: 11px;
+  opacity: 0.85;
+  background-color: rgba(0, 0, 0, 0.08);
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
 }
 
 .mode-overlay {

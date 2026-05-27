@@ -101,7 +101,8 @@
     "mountError": "マウントエラー",
     "clearMountErrors": "マウントエラーをクリア",
     "mountErrorsCleared": "マウントエラーをクリアしました",
-    "mountErrorsClearFailed": "マウントエラーのクリアに失敗"
+    "mountErrorsClearFailed": "マウントエラーのクリアに失敗",
+    "suggestIgnoreHint": "このモジュールの .sh ファイルにはマウント関連のコマンドが含まれています。モードを「Ignore」に設定することを検討してください。"
   },
   "kasumi": {
     "title": "Kasumi の動作状態",

@@ -30,6 +30,7 @@ export interface Module {
   source_path?: string;
   rules: ModuleRules;
   mount_error?: string;
+  suggest_ignore?: boolean;
 }
 
 export interface StorageStatus {

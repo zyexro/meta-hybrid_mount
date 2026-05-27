@@ -362,11 +362,19 @@ export default function ModulesTab() {
                                 >
                                   <path d={ICONS.bug} fill="currentColor" />
                                 </svg>
-                                <span class="error-text">
-                                  {uiStore.L.modules?.mountError ||
-                                    "Mount Error"}
-                                  : {mod.mount_error}
-                                </span>
+                                <div class="error-content">
+                                  <span class="error-text">
+                                    {uiStore.L.modules?.mountError ||
+                                      "Mount Error"}
+                                    : {mod.mount_error}
+                                  </span>
+                                  <Show when={mod.suggest_ignore}>
+                                    <span class="suggest-ignore-hint">
+                                      {uiStore.L.modules?.suggestIgnoreHint ??
+                                        "This module contains mount-related commands in its .sh files. Consider setting its mode to 'Ignore'."}
+                                    </span>
+                                  </Show>
+                                </div>
                               </div>
                             </Show>
 

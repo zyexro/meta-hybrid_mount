@@ -101,7 +101,8 @@
     "mountError": "Kesalahan Mount",
     "clearMountErrors": "Hapus Kesalahan Mount",
     "mountErrorsCleared": "Kesalahan mount berhasil dihapus",
-    "mountErrorsClearFailed": "Gagal menghapus kesalahan mount"
+    "mountErrorsClearFailed": "Gagal menghapus kesalahan mount",
+    "suggestIgnoreHint": "Modul ini berisi perintah mount di file .sh-nya. Pertimbangkan untuk mengatur modenya ke \"Ignore\"."
   },
   "kasumi": {
     "title": "Runtime Kasumi",

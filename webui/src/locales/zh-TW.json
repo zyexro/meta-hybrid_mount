@@ -101,7 +101,8 @@
     "mountError": "掛載錯誤",
     "clearMountErrors": "清除掛載錯誤",
     "mountErrorsCleared": "掛載錯誤已清除",
-    "mountErrorsClearFailed": "清除掛載錯誤失敗"
+    "mountErrorsClearFailed": "清除掛載錯誤失敗",
+    "suggestIgnoreHint": "該模組的 .sh 檔案中包含掛載相關指令，建議將其模式設定為 \"Ignore\"（忽略）。"
   },
   "kasumi": {
     "title": "Kasumi 工作狀態",

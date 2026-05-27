@@ -101,7 +101,8 @@
     "mountError": "Lỗi mount",
     "clearMountErrors": "Xóa lỗi mount",
     "mountErrorsCleared": "Đã xóa lỗi mount",
-    "mountErrorsClearFailed": "Không thể xóa lỗi mount"
+    "mountErrorsClearFailed": "Không thể xóa lỗi mount",
+    "suggestIgnoreHint": "Mô-đun này chứa các lệnh mount trong tệp .sh. Hãy cân nhắc đặt chế độ thành \"Ignore\"."
   },
   "kasumi": {
     "title": "Trạng thái Kasumi",
