@@ -24,6 +24,7 @@ export function buildModeStats(
     overlay: toNonNegativeInt(modeStats.overlayfs),
     magic: toNonNegativeInt(modeStats.magicmount),
     kasumi: ENABLE_KASUMI ? toNonNegativeInt(modeStats.kasumi) : 0,
+    blacklisted: toNonNegativeInt(modeStats.blacklisted),
   };
 }
 

@@ -122,11 +122,21 @@ fn build_scanned_modules_payload(
         }
 
         let rules = inventory::load_module_rules(config, &id);
-        let enabled = !inventory::has_mount_block_marker(&module_path);
+        let is_blacklisted =
+            runtime_index.is_blacklisted(&id) || config.module_blacklist.contains(&id);
+        let enabled = !is_blacklisted && !inventory::has_mount_block_marker(&module_path);
         let runtime_mode = enabled.then(|| runtime_index.mode(&id)).flatten();
-        let mode = runtime_mode.unwrap_or(rules.default_mode);
+        let mode = if is_blacklisted {
+            MountMode::Ignore
+        } else {
+            runtime_mode.unwrap_or(rules.default_mode)
+        };
 
-        let mount_error = mount_error_reason(&runtime_index, &id, &module_path);
+        let mount_error = if is_blacklisted {
+            Some("blacklisted".to_string())
+        } else {
+            mount_error_reason(&runtime_index, &id, &module_path)
+        };
 
         modules.push(ModuleListEntry {
             id,
@@ -150,6 +160,7 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
     ids.extend(state.magic_modules.iter().cloned());
     ids.extend(state.kasumi_modules.iter().cloned());
     ids.extend(state.skip_mount_modules.iter().cloned());
+    ids.extend(state.blacklisted_modules.iter().cloned());
     ids.extend(state.mount_error_modules.iter().cloned());
     ids.extend(collect_mount_error_marker_modules(&config.moduledir));
     ids.extend(config.rules.keys().cloned());
@@ -159,11 +170,26 @@ fn build_runtime_modules_payload(config: &Config, state: &RuntimeState) -> Vec<M
         .map(|id| {
             let source_path = config.moduledir.join(&id);
             let rules = inventory::load_module_rules(config, &id);
-            let runtime_mode = runtime_index.mode(&id);
-            let mode = runtime_mode.unwrap_or(rules.default_mode);
-            let enabled =
-                runtime_index.enabled(&id) && !inventory::has_mount_block_marker(&source_path);
-            let mount_error = mount_error_reason(&runtime_index, &id, &source_path);
+            let is_blacklisted = runtime_index.is_blacklisted(&id);
+            let runtime_mode = if is_blacklisted {
+                None
+            } else {
+                runtime_index.mode(&id)
+            };
+            let mode = if is_blacklisted {
+                MountMode::Ignore
+            } else {
+                runtime_mode.unwrap_or(rules.default_mode)
+            };
+            let enabled = !is_blacklisted
+                && runtime_index.enabled(&id)
+                && !inventory::has_mount_block_marker(&source_path);
+
+            let mount_error = if is_blacklisted {
+                Some("blacklisted".to_string())
+            } else {
+                mount_error_reason(&runtime_index, &id, &source_path)
+            };
 
             ModuleListEntry {
                 id,
@@ -277,6 +303,7 @@ struct RuntimeModuleIndex<'a> {
     magic: HashSet<&'a str>,
     kasumi: HashSet<&'a str>,
     skipped: HashSet<&'a str>,
+    blacklisted: HashSet<&'a str>,
     mount_errors: HashSet<&'a str>,
     mount_error_reasons: &'a std::collections::BTreeMap<String, String>,
 }
@@ -289,6 +316,11 @@ impl<'a> RuntimeModuleIndex<'a> {
             kasumi: state.kasumi_modules.iter().map(String::as_str).collect(),
             skipped: state
                 .skip_mount_modules
+                .iter()
+                .map(String::as_str)
+                .collect(),
+            blacklisted: state
+                .blacklisted_modules
                 .iter()
                 .map(String::as_str)
                 .collect(),
@@ -315,7 +347,11 @@ impl<'a> RuntimeModuleIndex<'a> {
     }
 
     fn enabled(&self, module_id: &str) -> bool {
-        !self.skipped.contains(module_id)
+        !self.skipped.contains(module_id) && !self.blacklisted.contains(module_id)
+    }
+
+    fn is_blacklisted(&self, module_id: &str) -> bool {
+        self.blacklisted.contains(module_id)
     }
 
     fn mount_error_reason(&self, module_id: &str) -> Option<String> {

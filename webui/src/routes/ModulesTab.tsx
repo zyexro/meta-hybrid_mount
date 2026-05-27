@@ -28,7 +28,9 @@ export default function ModulesTab() {
   const BATCH_SIZE = 20;
   const [searchQuery, setSearchQuery] = createSignal("");
   const deferredSearchQuery = createDeferred(searchQuery);
-  const [filterType, setFilterType] = createSignal<"all" | MountMode>("all");
+  const [filterType, setFilterType] = createSignal<
+    "all" | MountMode | "blacklisted"
+  >("all");
   const [showUnmounted, setShowUnmounted] = createSignal(false);
   const [expandedId, setExpandedId] = createSignal<string | null>(null);
   const [visibleCount, setVisibleCount] = createSignal(BATCH_SIZE);
@@ -114,7 +116,9 @@ export default function ModulesTab() {
       ) {
         return false;
       }
-      if (currentFilter !== "all" && module.mode !== currentFilter) {
+      if (currentFilter === "blacklisted") {
+        if (module.mount_error !== "blacklisted") return false;
+      } else if (currentFilter !== "all" && module.mode !== currentFilter) {
         return false;
       }
 
@@ -167,6 +171,8 @@ export default function ModulesTab() {
 
   function getModeLabel(mod: Module) {
     const modes = uiStore.L.modules?.modes;
+    if (mod.mount_error === "blacklisted")
+      return modes?.blacklisted ?? "Blacklisted";
     if (!mod.is_mounted) return modes?.unmounted ?? "Unmounted";
     const mode = mod.mode;
     if (mode === "magic") return modes?.magic ?? "Magic";
@@ -177,6 +183,7 @@ export default function ModulesTab() {
   }
 
   function getModeClass(mod: Module) {
+    if (mod.mount_error === "blacklisted") return "mode-blacklisted";
     if (!mod.is_mounted) return "mode-ignore";
     const mode = mod.mode;
     if (mode === "magic") return "mode-magic";
@@ -243,7 +250,9 @@ export default function ModulesTab() {
                 class="filter-select"
                 value={filterType()}
                 onChange={(e) =>
-                  setFilterType(e.currentTarget.value as "all" | MountMode)
+                  setFilterType(
+                    e.currentTarget.value as "all" | MountMode | "blacklisted",
+                  )
                 }
                 aria-label={uiStore.L.modules?.filterLabel || "Filter modules"}
                 title={uiStore.L.modules?.filterLabel || "Filter modules"}
@@ -260,6 +269,9 @@ export default function ModulesTab() {
                     {uiStore.L.modules?.modes?.short?.kasumi ?? "Kasumi"}
                   </option>
                 </Show>
+                <option value="blacklisted">
+                  {uiStore.L.modules?.modes?.blacklisted ?? "Blacklisted"}
+                </option>
               </select>
             </div>
           </div>
@@ -324,10 +336,12 @@ export default function ModulesTab() {
                           </div>
                           <Show when={mod.mount_error}>
                             <div
-                              class="error-indicator"
+                              class={`error-indicator ${mod.mount_error === "blacklisted" ? "blacklisted-indicator" : ""}`}
                               title={mod.mount_error}
                             >
-                              ERROR
+                              {mod.mount_error === "blacklisted"
+                                ? "BLACKLIST"
+                                : "ERROR"}
                             </div>
                           </Show>
                         </div>

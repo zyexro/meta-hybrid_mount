@@ -25,14 +25,17 @@ const createModuleStore = () => {
   }
 
   const modeStats = createMemo((): ModeStats => {
-    const stats = { overlay: 0, magic: 0, kasumi: 0 };
-    modules.forEach((module) => {
-      if (!module.is_mounted) return;
-      const mode = module.mode;
-      if (mode === "overlay") stats.overlay++;
-      else if (mode === "magic") stats.magic++;
-      else if (mode === "kasumi") stats.kasumi++;
-    });
+    const stats: ModeStats = {
+      overlay: 0,
+      magic: 0,
+      kasumi: 0,
+      blacklisted: 0,
+    };
+    for (const m of modules) {
+      if (m.is_mounted && m.mode in stats) {
+        stats[m.mode as keyof ModeStats]++;
+      }
+    }
     return stats;
   });
 

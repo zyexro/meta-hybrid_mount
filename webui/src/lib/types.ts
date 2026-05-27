@@ -174,4 +174,5 @@ export interface ModeStats {
   overlay: number;
   magic: number;
   kasumi: number;
+  blacklisted: number;
 }

@@ -166,6 +166,12 @@ impl std::fmt::Display for DaemonStartupMode {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+pub struct BlacklistConfig {
+    pub blacklist: Vec<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(default)]
 pub struct Config {
@@ -178,6 +184,8 @@ pub struct Config {
     pub kasumi: KasumiConfig,
     pub rules: HashMap<String, ModuleRules>,
     pub daemon_startup_mode: DaemonStartupMode,
+    #[serde(skip)]
+    pub module_blacklist: Vec<String>,
 }
 
 fn is_kasumi_default(_kasumi: &KasumiConfig) -> bool {
@@ -206,6 +214,7 @@ impl Default for Config {
             kasumi: KasumiConfig::default(),
             rules: HashMap::new(),
             daemon_startup_mode: DaemonStartupMode::default(),
+            module_blacklist: Vec::new(),
         }
     }
 }

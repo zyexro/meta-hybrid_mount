@@ -36,6 +36,7 @@ pub fn scan(source_dir: &Path, cfg: &config::Config) -> Result<Vec<Module>> {
     let mut modules = Vec::new();
     let mut skipped_reserved = 0usize;
     let mut skipped_blocked = 0usize;
+    let mut skipped_blacklisted = 0usize;
 
     for entry in fs::read_dir(source_dir)? {
         let entry = entry?;
@@ -50,6 +51,12 @@ pub fn scan(source_dir: &Path, cfg: &config::Config) -> Result<Vec<Module>> {
         if inventory::is_reserved_module_dir(&id) {
             skipped_reserved += 1;
             crate::scoped_log!(debug, "scanner", "skip: module={}, reason=reserved_dir", id);
+            continue;
+        }
+
+        if cfg.module_blacklist.contains(&id) {
+            skipped_blacklisted += 1;
+            crate::scoped_log!(debug, "scanner", "skip: module={}, reason=blacklisted", id);
             continue;
         }
 
@@ -76,11 +83,12 @@ pub fn scan(source_dir: &Path, cfg: &config::Config) -> Result<Vec<Module>> {
     crate::scoped_log!(
         info,
         "scanner",
-        "complete: total_dirs={}, active_modules={}, skipped_reserved={}, skipped_blocked={}",
-        modules.len() + skipped_reserved + skipped_blocked,
+        "complete: total_dirs={}, active_modules={}, skipped_reserved={}, skipped_blocked={}, skipped_blacklisted={}",
+        modules.len() + skipped_reserved + skipped_blocked + skipped_blacklisted,
         modules.len(),
         skipped_reserved,
-        skipped_blocked
+        skipped_blocked,
+        skipped_blacklisted
     );
 
     modules.sort_by(|a, b| a.id.cmp(&b.id));

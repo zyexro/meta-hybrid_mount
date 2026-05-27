@@ -28,6 +28,7 @@ pub const SOCKET_FILE: &str = "/data/adb/hybrid-mount/run/daemon.sock";
 pub const PID_FILE: &str = "/data/adb/hybrid-mount/run/daemon.pid";
 pub const SYSTEM_RW_DIR: &str = "/data/adb/hybrid-mount/rw";
 pub const CONFIG_FILE: &str = "/data/adb/hybrid-mount/config.toml";
+pub const MODULE_BLACKLIST_FILE: &str = "/data/adb/hybrid-mount/module_blacklist.toml";
 pub const USER_HIDE_RULES_FILE: &str = "/data/adb/hybrid-mount/user_hide_rules.json";
 pub const MODULE_PROP_FILE: &str = "/data/adb/modules/hybrid_mount/module.prop";
 pub const KASUMI_MIRROR_DIR: &str = "/dev/kasumi_mirror";

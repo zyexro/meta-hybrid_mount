@@ -110,6 +110,7 @@ pub struct ModuleModeStats {
     pub overlayfs: usize,
     pub magicmount: usize,
     pub kasumi: usize,
+    pub blacklisted: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -156,6 +157,8 @@ pub struct RuntimeState {
     pub mount_error_reasons: BTreeMap<String, String>,
     #[serde(default)]
     pub skip_mount_modules: Vec<String>,
+    #[serde(default)]
+    pub blacklisted_modules: Vec<String>,
     #[serde(default)]
     pub active_mounts: Vec<String>,
     #[cfg(feature = "control-plane")]
@@ -226,6 +229,7 @@ impl RuntimeState {
             mount_error_modules: Vec::new(),
             mount_error_reasons: BTreeMap::new(),
             skip_mount_modules: Vec::new(),
+            blacklisted_modules: Vec::new(),
             active_mounts,
             #[cfg(feature = "control-plane")]
             tmpfs_xattr_supported,
@@ -382,6 +386,8 @@ impl RuntimeState {
         state.mount_error_reasons = previous_state.mount_error_reasons;
         clear_recovered_mount_errors(&mut state);
         state.skip_mount_modules = collect_skip_mount_modules(config);
+        state.blacklisted_modules = collect_blacklisted_modules(config);
+        state.mode_stats.blacklisted = state.blacklisted_modules.len();
         state.daemon = previous_state.daemon;
         state.invalidate_cache();
 
@@ -461,6 +467,7 @@ fn collect_mode_stats(result: &ExecutionResult) -> ModuleModeStats {
                 0usize
             }
         },
+        blacklisted: 0usize,
     }
 }
 
@@ -517,6 +524,29 @@ fn collect_skip_mount_modules(config: &Config) -> Vec<String> {
     crate::scoped_log!(
         debug,
         "runtime_state:skip_modules",
+        "complete: moduledir={}, modules={}",
+        config.moduledir.display(),
+        modules.len()
+    );
+
+    modules
+}
+
+fn collect_blacklisted_modules(config: &Config) -> Vec<String> {
+    let mut modules: Vec<String> = config
+        .module_blacklist
+        .iter()
+        .filter(|id| {
+            let module_dir = config.moduledir.join(id);
+            module_dir.is_dir()
+        })
+        .cloned()
+        .collect();
+    modules.sort();
+
+    crate::scoped_log!(
+        debug,
+        "runtime_state:blacklisted",
         "complete: moduledir={}, modules={}",
         config.moduledir.display(),
         modules.len()

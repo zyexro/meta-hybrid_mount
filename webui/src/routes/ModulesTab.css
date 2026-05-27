@@ -273,6 +273,16 @@
   color: var(--md-sys-color-on-surface-variant);
 }
 
+.mode-blacklisted {
+  background-color: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.blacklisted-indicator {
+  background-color: var(--md-sys-color-tertiary-container);
+  color: var(--md-sys-color-on-tertiary-container);
+}
+
 /* 动画核心样式 */
 .module-body-wrapper {
   display: grid;

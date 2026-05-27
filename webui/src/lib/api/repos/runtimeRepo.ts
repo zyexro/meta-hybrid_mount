@@ -8,6 +8,7 @@ export interface RuntimeStatePayload {
   mount_error_modules?: string[];
   mount_error_reasons?: Record<string, string>;
   skip_mount_modules?: string[];
+  blacklisted_modules?: string[];
   active_mounts?: string[];
   tmpfs_xattr_supported?: boolean;
   mode_stats?: RuntimeModeStatsPayload;
@@ -21,6 +22,7 @@ export interface RuntimeModeStatsPayload {
   overlayfs?: number;
   magicmount?: number;
   kasumi?: number;
+  blacklisted?: number;
 }
 
 export interface RuntimeKasumiPayload {

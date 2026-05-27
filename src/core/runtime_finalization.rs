@@ -50,6 +50,12 @@ pub fn finalize(
         }
     );
 
+    let blacklisted_count = config
+        .module_blacklist
+        .iter()
+        .filter(|id| config.moduledir.join(id).is_dir())
+        .count();
+
     module_status::update_description(
         storage_mode,
         config.kasumi.enabled,
@@ -65,6 +71,7 @@ pub fn finalize(
                 0usize
             }
         },
+        blacklisted_count,
     );
 
     let state = RuntimeState::build_from_execution(config, storage_mode, mount_point, result);

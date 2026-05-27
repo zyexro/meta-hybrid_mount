@@ -143,6 +143,11 @@ else
   ui_print "- Skipping setup wizard to preserve settings"
 fi
 
+if [ ! -f "$BASE_DIR/module_blacklist.toml" ]; then
+  ui_print "- Installing default module blacklist..."
+  cat "$MODPATH/module_blacklist.toml" >"$BASE_DIR/module_blacklist.toml"
+fi
+
 set_perm_recursive "$MODPATH" 0 0 0755 0644
 set_perm "$BIN_TARGET" 0 0 0755
 ui_print "- Installation complete"
