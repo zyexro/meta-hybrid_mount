@@ -67,22 +67,15 @@ fn build_dtype(path: &Path) -> Result<(i32, bool)> {
         return Ok((libc::DT_UNKNOWN as i32, true));
     }
 
-    let d_type = if file_type.is_file() {
-        libc::DT_REG as i32
-    } else if file_type.is_symlink() {
-        libc::DT_LNK as i32
-    } else if file_type.is_dir() {
-        libc::DT_DIR as i32
-    } else if file_type.is_block_device() {
-        libc::DT_BLK as i32
-    } else if file_type.is_char_device() {
-        libc::DT_CHR as i32
-    } else if file_type.is_fifo() {
-        libc::DT_FIFO as i32
-    } else if file_type.is_socket() {
-        libc::DT_SOCK as i32
-    } else {
-        libc::DT_UNKNOWN as i32
+    let d_type = match metadata.mode() & libc::S_IFMT {
+        libc::S_IFREG => libc::DT_REG as i32,
+        libc::S_IFLNK => libc::DT_LNK as i32,
+        libc::S_IFDIR => libc::DT_DIR as i32,
+        libc::S_IFBLK => libc::DT_BLK as i32,
+        libc::S_IFCHR => libc::DT_CHR as i32,
+        libc::S_IFIFO => libc::DT_FIFO as i32,
+        libc::S_IFSOCK => libc::DT_SOCK as i32,
+        _ => libc::DT_UNKNOWN as i32,
     };
 
     Ok((d_type, false))

@@ -54,16 +54,10 @@ fn running_description(
     kasumi_count: usize,
     blacklisted_count: usize,
 ) -> String {
-    let mode_str = match storage_mode {
+    let (mode_str, status_emoji) = match storage_mode {
         #[cfg(feature = "control-plane")]
-        StorageMode::Tmpfs => "Tmpfs",
-        StorageMode::Ext4 => "Ext4",
-    };
-
-    let status_emoji = match storage_mode {
-        #[cfg(feature = "control-plane")]
-        StorageMode::Tmpfs => "🐾",
-        StorageMode::Ext4 => "💿",
+        StorageMode::Tmpfs => ("Tmpfs", "🐾"),
+        StorageMode::Ext4 => ("Ext4", "💿"),
     };
 
     let mut stats = Vec::new();

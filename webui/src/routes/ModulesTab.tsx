@@ -169,26 +169,38 @@ export default function ModulesTab() {
     }
   }
 
-  function getModeLabel(mod: Module) {
-    const modes = uiStore.L.modules?.modes;
-    if (mod.mount_error === "blacklisted")
-      return modes?.blacklisted ?? "Blacklisted";
-    if (!mod.is_mounted) return modes?.unmounted ?? "Unmounted";
-    const mode = mod.mode;
-    if (mode === "magic") return modes?.magic ?? "Magic";
-    if (mode === "kasumi") {
-      return modes?.kasumi ?? "Kasumi";
-    }
-    return modes?.overlay ?? "OverlayFS";
-  }
+  const MODE_DISPLAY: Record<string, { label: () => string; cls: string }> = {
+    blacklisted: {
+      label: () => uiStore.L.modules?.modes?.blacklisted ?? "Blacklisted",
+      cls: "mode-blacklisted",
+    },
+    unmounted: {
+      label: () => uiStore.L.modules?.modes?.unmounted ?? "Unmounted",
+      cls: "mode-ignore",
+    },
+    magic: {
+      label: () => uiStore.L.modules?.modes?.magic ?? "Magic",
+      cls: "mode-magic",
+    },
+    kasumi: {
+      label: () => uiStore.L.modules?.modes?.kasumi ?? "Kasumi",
+      cls: "mode-kasumi",
+    },
+    overlay: {
+      label: () => uiStore.L.modules?.modes?.overlay ?? "OverlayFS",
+      cls: "mode-overlay",
+    },
+  };
 
-  function getModeClass(mod: Module) {
-    if (mod.mount_error === "blacklisted") return "mode-blacklisted";
-    if (!mod.is_mounted) return "mode-ignore";
-    const mode = mod.mode;
-    if (mode === "magic") return "mode-magic";
-    if (mode === "kasumi") return "mode-kasumi";
-    return "mode-overlay";
+  function getModeInfo(mod: Module): { label: string; cls: string } {
+    const key =
+      mod.mount_error === "blacklisted"
+        ? "blacklisted"
+        : !mod.is_mounted
+          ? "unmounted"
+          : mod.mode;
+    const entry = MODE_DISPLAY[key] ?? MODE_DISPLAY.overlay;
+    return { label: entry.label(), cls: entry.cls };
   }
 
   function getEffectiveDefaultMode(mod: Module): MountMode {
@@ -331,8 +343,8 @@ export default function ModulesTab() {
                           </div>
                         </div>
                         <div class="mode-group">
-                          <div class={`mode-indicator ${getModeClass(mod)}`}>
-                            {getModeLabel(mod)}
+                          <div class={`mode-indicator ${getModeInfo(mod).cls}`}>
+                            {getModeInfo(mod).label}
                           </div>
                           <Show when={mod.mount_error}>
                             <div

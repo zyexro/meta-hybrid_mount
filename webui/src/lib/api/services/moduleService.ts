@@ -72,10 +72,9 @@ function parseModuleMetadata(raw: string, moduleId: string): ModuleMetadata {
     if (!value) {
       continue;
     }
-    if (key === "name") metadata.name = value;
-    else if (key === "version") metadata.version = value;
-    else if (key === "author") metadata.author = value;
-    else if (key === "description") metadata.description = value;
+    if (key in metadata) {
+      (metadata as unknown as Record<string, string>)[key] = value;
+    }
   }
   return metadata;
 }

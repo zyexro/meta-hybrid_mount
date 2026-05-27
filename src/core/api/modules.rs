@@ -416,16 +416,14 @@ impl<'a> RuntimeModuleIndex<'a> {
     }
 
     fn mode(&self, module_id: &str) -> Option<MountMode> {
-        if self.overlay.contains(module_id) {
-            return Some(MountMode::Overlay);
-        }
-        if self.magic.contains(module_id) {
-            return Some(MountMode::Magic);
-        }
-        if self.kasumi.contains(module_id) {
-            return Some(MountMode::Kasumi);
-        }
-        None
+        [
+            (&self.overlay, MountMode::Overlay),
+            (&self.magic, MountMode::Magic),
+            (&self.kasumi, MountMode::Kasumi),
+        ]
+        .into_iter()
+        .find(|(set, _)| set.contains(module_id))
+        .map(|(_, mode)| mode)
     }
 
     fn enabled(&self, module_id: &str) -> bool {
