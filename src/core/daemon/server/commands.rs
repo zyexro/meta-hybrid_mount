@@ -866,6 +866,7 @@ fn build_kasumi_runtime_json(config: &Config, runtime_state: &RuntimeState) -> R
     to_value(&json!({
         "status": kasumi_info.status,
         "available": kasumi_info.available,
+        "kernel_supported": kasumi_info.kernel_supported,
         "protocol_version": kasumi_info.protocol_version,
         "feature_bits": kasumi_info.feature_bits,
         "feature_names": kasumi_info.feature_names,

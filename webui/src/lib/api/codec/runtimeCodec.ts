@@ -67,6 +67,9 @@ export function buildKasumiStatusFromPayload(
         ? "unavailable"
         : "disabled",
     available: isBoolean(payload.available) ? payload.available : false,
+    kernel_supported: isBoolean(payload.kernel_supported)
+      ? payload.kernel_supported
+      : false,
     protocol_version:
       payload.protocol_version === null || isNumber(payload.protocol_version)
         ? ((payload.protocol_version as number | null | undefined) ?? null)

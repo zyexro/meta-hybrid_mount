@@ -144,6 +144,7 @@ export interface KasumiRuntimeInfo {
 export interface KasumiStatus {
   status: string;
   available: boolean;
+  kernel_supported: boolean;
   protocol_version: number | null;
   feature_bits?: number | null;
   feature_names: string[];

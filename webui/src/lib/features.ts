@@ -4,6 +4,7 @@ import { ENABLE_KASUMI } from "./constants_gen";
 const createFeatures = () => {
   const [kasumiEnabled, setKasumiEnabled] = createSignal(false);
   const [kasumiAvailable, setKasumiAvailable] = createSignal(false);
+  const [kasumiKernelSupported, setKasumiKernelSupported] = createSignal(false);
 
   return {
     get kasumiBuildEnabled() {
@@ -15,10 +16,18 @@ const createFeatures = () => {
     get kasumiAvailable() {
       return ENABLE_KASUMI && kasumiAvailable();
     },
-    setKasumiStatus(enabled: boolean, available: boolean) {
+    get kasumiKernelSupported() {
+      return ENABLE_KASUMI && kasumiKernelSupported();
+    },
+    setKasumiStatus(
+      enabled: boolean,
+      available: boolean,
+      kernelSupported: boolean,
+    ) {
       if (!ENABLE_KASUMI) return;
       setKasumiEnabled(enabled && available);
       setKasumiAvailable(available);
+      setKasumiKernelSupported(kernelSupported);
     },
   };
 };

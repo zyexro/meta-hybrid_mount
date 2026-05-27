@@ -117,6 +117,7 @@ pub struct ModuleModeStats {
 pub struct KasumiRuntimeInfo {
     pub status: String,
     pub available: bool,
+    pub kernel_supported: bool,
     pub lkm_loaded: bool,
     pub lkm_autoload: bool,
     pub lkm_kmi_override: String,

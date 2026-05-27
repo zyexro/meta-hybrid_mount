@@ -218,6 +218,7 @@ export default function App() {
             features.setKasumiStatus(
               kasumiStore.enabled,
               Boolean(kasumiStore.status?.available),
+              Boolean(kasumiStore.status?.kernel_supported),
             );
           });
         }
@@ -258,6 +259,7 @@ export default function App() {
           features.setKasumiStatus(
             kasumiStore.enabled,
             Boolean(kasumiStore.status?.available),
+            Boolean(kasumiStore.status?.kernel_supported),
           );
         }
       }

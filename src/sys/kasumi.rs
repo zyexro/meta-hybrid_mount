@@ -479,7 +479,7 @@ fn module_loaded() -> bool {
 
 /// Returns `true` when the running kernel version matches one of the supported
 /// versions for which a prebuilt Kasumi LKM is available.
-fn kernel_is_supported() -> bool {
+pub fn kernel_is_supported() -> bool {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         const SUPPORTED: &[&str] = &["5.10", "5.15", "6.1", "6.6", "6.12"];

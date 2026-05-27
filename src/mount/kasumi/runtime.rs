@@ -32,11 +32,14 @@ use crate::{
     },
     core::{inventory::Module, ops::plan::MountPlan, user_hide_rules},
     defs,
-    sys::kasumi::{
-        self, KSM_FEATURE_CMDLINE_SPOOF, KSM_FEATURE_KSTAT_SPOOF, KSM_FEATURE_MAPS_SPOOF,
-        KSM_FEATURE_MOUNT_HIDE, KSM_FEATURE_SELINUX_FIX, KSM_FEATURE_STATFS_SPOOF,
-        KSM_FEATURE_UNAME_SPOOF, KasumiMapsRule, KasumiMountHideArg, KasumiSpoofKstat,
-        KasumiSpoofUname, KasumiStatfsSpoofArg,
+    sys::{
+        kasumi::{
+            self, KSM_FEATURE_CMDLINE_SPOOF, KSM_FEATURE_KSTAT_SPOOF, KSM_FEATURE_MAPS_SPOOF,
+            KSM_FEATURE_MOUNT_HIDE, KSM_FEATURE_SELINUX_FIX, KSM_FEATURE_STATFS_SPOOF,
+            KSM_FEATURE_UNAME_SPOOF, KasumiMapsRule, KasumiMountHideArg, KasumiSpoofKstat,
+            KasumiSpoofUname, KasumiStatfsSpoofArg,
+        },
+        lkm,
     },
 };
 
@@ -439,6 +442,13 @@ pub fn reset_runtime(config: &config::Config) -> Result<bool> {
 }
 
 pub fn apply_runtime_config(config: &config::Config) -> Result<bool> {
+    // When the user enables Kasumi but the LKM hasn't been loaded yet, attempt
+    // autoload so the deadlock ("switch hidden because LKM not loaded, LKM not
+    // loaded because switch hidden") is broken.
+    if config.kasumi.enabled && !can_operate(config) {
+        let _ = lkm::autoload_if_needed(&config.kasumi);
+    }
+
     if !can_operate(config) {
         return Ok(false);
     }

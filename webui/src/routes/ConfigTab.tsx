@@ -131,6 +131,7 @@ export default function ConfigTab() {
       features.setKasumiStatus(
         kasumiStore.enabled,
         Boolean(kasumiStore.status?.available),
+        Boolean(kasumiStore.status?.kernel_supported),
       );
       if (enabled) {
         setCookie(KASUMI_WARNING_COOKIE, "1");
@@ -175,7 +176,7 @@ export default function ConfigTab() {
 
   return (
     <>
-      <Show when={ENABLE_KASUMI && features.kasumiAvailable}>
+      <Show when={ENABLE_KASUMI && features.kasumiKernelSupported}>
         <div class="dialog-container">
           <md-dialog
             open={showKasumiWarning()}
@@ -398,7 +399,7 @@ export default function ConfigTab() {
           </div>
         </section>
 
-        <Show when={ENABLE_KASUMI && features.kasumiAvailable}>
+        <Show when={ENABLE_KASUMI && features.kasumiKernelSupported}>
           <section class="config-group">
             <div class="webui-label">
               {uiStore.L.config?.experimentalFeatures ||

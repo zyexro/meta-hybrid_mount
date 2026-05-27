@@ -130,6 +130,7 @@ function buildMockKasumiStatus(): KasumiStatus {
     return {
       status: "disabled",
       available: false,
+      kernel_supported: false,
       protocol_version: null,
       feature_bits: null,
       feature_names: [],
@@ -152,6 +153,7 @@ function buildMockKasumiStatus(): KasumiStatus {
   return {
     status: available ? "available" : "unavailable",
     available,
+    kernel_supported: true,
     protocol_version: available ? 16 : null,
     feature_bits: available ? 0x7f7 : null,
     feature_names: available

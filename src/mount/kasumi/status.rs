@@ -71,6 +71,7 @@ pub fn collect_runtime_info(config: &config::Config) -> KasumiRuntimeInfo {
     KasumiRuntimeInfo {
         status,
         available,
+        kernel_supported: kasumi::kernel_is_supported(),
         lkm_loaded,
         lkm_autoload: config.kasumi.lkm_autoload,
         lkm_kmi_override: config.kasumi.lkm_kmi_override.clone(),
