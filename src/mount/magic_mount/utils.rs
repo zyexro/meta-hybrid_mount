@@ -448,6 +448,14 @@ where
 {
     let src_symlink = read_link(src.as_ref())?;
     symlink(&src_symlink, dst.as_ref())?;
-    let _ = lsetfilecon(dst.as_ref(), lgetfilecon(src.as_ref())?.as_str());
+    if let Err(e) = lsetfilecon(dst.as_ref(), lgetfilecon(src.as_ref())?.as_str()) {
+        crate::scoped_log!(
+            debug,
+            "magic_mount",
+            "clone symlink selinux context failed: dst={}, error={:#}",
+            dst.as_ref().display(),
+            e
+        );
+    }
     Ok(())
 }

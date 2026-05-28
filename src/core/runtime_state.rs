@@ -330,16 +330,7 @@ impl RuntimeState {
             mount_point.display(),
             result.overlay_module_ids.len(),
             result.magic_module_ids.len(),
-            {
-                #[cfg(feature = "kasumi")]
-                {
-                    result.kasumi_module_ids.len()
-                }
-                #[cfg(not(feature = "kasumi"))]
-                {
-                    0usize
-                }
-            }
+            result.kasumi_count()
         );
 
         let previous_state = match Self::load() {
@@ -363,7 +354,7 @@ impl RuntimeState {
             KasumiRuntimeInfo::default()
         };
         let mut state = Self::new(
-            storage_mode.as_str().to_string(),
+            storage_mode.as_str().to_owned(),
             mount_point.to_path_buf(),
             result.overlay_module_ids.clone(),
             result.magic_module_ids.clone(),
@@ -457,16 +448,7 @@ fn collect_mode_stats(result: &ExecutionResult) -> ModuleModeStats {
     ModuleModeStats {
         overlayfs: result.overlay_module_ids.len(),
         magicmount: result.magic_module_ids.len(),
-        kasumi: {
-            #[cfg(feature = "kasumi")]
-            {
-                result.kasumi_module_ids.len()
-            }
-            #[cfg(not(feature = "kasumi"))]
-            {
-                0usize
-            }
-        },
+        kasumi: result.kasumi_count(),
         blacklisted: 0usize,
     }
 }
@@ -559,7 +541,7 @@ fn clear_recovered_mount_errors(state: &mut RuntimeState) {
     let mounted: HashSet<String> = state
         .mounted_module_ids()
         .into_iter()
-        .map(ToString::to_string)
+        .map(|s| s.to_owned())
         .collect();
     state
         .mount_error_modules

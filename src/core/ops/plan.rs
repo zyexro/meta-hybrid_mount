@@ -50,3 +50,16 @@ pub struct MountPlan {
     #[cfg(feature = "kasumi")]
     pub kasumi_module_ids: Vec<String>,
 }
+
+impl MountPlan {
+    pub fn kasumi_count(&self) -> usize {
+        #[cfg(feature = "kasumi")]
+        {
+            self.kasumi_module_ids.len()
+        }
+        #[cfg(not(feature = "kasumi"))]
+        {
+            0
+        }
+    }
+}

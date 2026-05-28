@@ -19,7 +19,9 @@ use std::{
 };
 
 fn os_str_eq_ignore_ascii_case(value: &OsStr, expected: &str) -> bool {
-    value.to_string_lossy().eq_ignore_ascii_case(expected)
+    value
+        .as_encoded_bytes()
+        .eq_ignore_ascii_case(expected.as_bytes())
 }
 
 pub fn normalize_path(path: &Path) -> PathBuf {

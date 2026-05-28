@@ -44,6 +44,19 @@ pub struct ExecutionResult {
     pub mount_stats: MountStatistics,
 }
 
+impl ExecutionResult {
+    pub fn kasumi_count(&self) -> usize {
+        #[cfg(feature = "kasumi")]
+        {
+            self.kasumi_module_ids.len()
+        }
+        #[cfg(not(feature = "kasumi"))]
+        {
+            0
+        }
+    }
+}
+
 pub struct Executor;
 
 impl Executor {
@@ -62,16 +75,7 @@ impl Executor {
             "start: overlay_ops={}, preselected_magic_modules={}, preselected_kasumi_modules={}",
             plan.overlay_ops.len(),
             plan.magic_module_ids.len(),
-            {
-                #[cfg(feature = "kasumi")]
-                {
-                    plan.kasumi_module_ids.len()
-                }
-                #[cfg(not(feature = "kasumi"))]
-                {
-                    0usize
-                }
-            }
+            plan.kasumi_count()
         );
         let mut final_magic_ids: BTreeSet<String> = plan.magic_module_ids.iter().cloned().collect();
         let mut final_overlay_ids: BTreeSet<String> = BTreeSet::new();
@@ -247,7 +251,9 @@ impl Executor {
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
         if !config.disable_umount {
-            let _ = umount_mgr::commit();
+            if let Err(e) = umount_mgr::commit() {
+                crate::scoped_log!(warn, "executor", "umount_mgr commit failed: {:#}", e);
+            }
         }
 
         let result_overlay: Vec<String> = final_overlay_ids.into_iter().collect();
@@ -259,16 +265,7 @@ impl Executor {
             "complete: overlay_modules={}, magic_modules={}, kasumi_modules={}",
             result_overlay.len(),
             result_magic.len(),
-            {
-                #[cfg(feature = "kasumi")]
-                {
-                    final_kasumi_ids.len()
-                }
-                #[cfg(not(feature = "kasumi"))]
-                {
-                    0usize
-                }
-            }
+            final_kasumi_ids.len()
         );
 
         Ok(ExecutionResult {

@@ -195,13 +195,20 @@ pub(super) fn handle_http_connection(
             Err(err) => {
                 if let Some(read_err) = err.downcast_ref::<WebuiHttpRequestReadError>() {
                     let (status, reason, message) = read_err.status();
-                    let _ = write_http_json(
+                    if let Err(e) = write_http_json(
                         &mut stream,
                         status,
                         reason,
                         &DaemonResponse::error(message),
                         ConnectionAction::Close,
-                    );
+                    ) {
+                        crate::scoped_log!(
+                            debug,
+                            "daemon:http",
+                            "failed to write error response: {:#}",
+                            e
+                        );
+                    }
                     break;
                 }
                 return Err(err);
@@ -508,7 +515,10 @@ fn handle_sse_endpoint(
         }
         if last_keepalive.elapsed().as_secs() >= KEEPALIVE_SECS {
             // SSE comment line — ignored by clients, keeps TCP alive.
-            let _ = write!(stream, ": keepalive\n\n").and_then(|_| stream.flush());
+            if let Err(e) = write!(stream, ": keepalive\n\n").and_then(|_| stream.flush()) {
+                crate::scoped_log!(debug, "daemon:sse", "keepalive write failed: {:#}", e);
+                break;
+            }
             last_keepalive = std::time::Instant::now();
         }
     }

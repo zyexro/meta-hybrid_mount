@@ -97,15 +97,13 @@ pub fn reflink_or_copy(src: &Path, dest: &Path) -> Result<u64> {
     }
     drop(dest_file);
     drop(src_file);
-    fs::copy(src, dest).map_err(|e| e.into())
+    Ok(fs::copy(src, dest)?)
 }
 
 pub fn remove_path(path: &Path) -> Result<()> {
     match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_dir() => {
-            fs::remove_dir_all(path).map_err(|err| err.into())
-        }
-        Ok(_) => fs::remove_file(path).map_err(|err| err.into()),
+        Ok(metadata) if metadata.file_type().is_dir() => Ok(fs::remove_dir_all(path)?),
+        Ok(_) => Ok(fs::remove_file(path)?),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(err) => Err(err.into()),
     }

@@ -88,7 +88,7 @@ fn collect_child_mount_points(root_path: &Path) -> Result<Vec<String>> {
         .mountinfo()
         .with_context(|| "get mountinfo")?;
 
-    let mount_seq = mounts
+    let mut mount_seq: Vec<String> = mounts
         .0
         .iter()
         .filter(|m| {
@@ -96,9 +96,10 @@ fn collect_child_mount_points(root_path: &Path) -> Result<Vec<String>> {
             mp.starts_with(root_path) && mp != root_path
         })
         .filter_map(|m| m.mount_point.to_str().map(|p| p.to_string()))
-        .collect::<std::collections::BTreeSet<_>>();
-
-    Ok(mount_seq.into_iter().collect())
+        .collect();
+    mount_seq.sort();
+    mount_seq.dedup();
+    Ok(mount_seq)
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]

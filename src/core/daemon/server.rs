@@ -131,7 +131,14 @@ pub fn serve(config: crate::conf::config::Config) -> Result<()> {
                     ) {
                         crate::scoped_log!(warn, "daemon", "request failed: error={:#}", err);
                         let payload = DaemonResponse::error(format!("{err:#}"));
-                        let _ = write_response(&mut stream, &payload);
+                        if let Err(e) = write_response(&mut stream, &payload) {
+                            crate::scoped_log!(
+                                debug,
+                                "daemon",
+                                "failed to write error response: {:#}",
+                                e
+                            );
+                        }
                     }
                 }
                 Err(err) if err.kind() == ErrorKind::WouldBlock => {}

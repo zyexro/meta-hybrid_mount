@@ -38,16 +38,7 @@ pub fn finalize(
         mount_point.display(),
         result.overlay_module_ids.len(),
         result.magic_module_ids.len(),
-        {
-            #[cfg(feature = "kasumi")]
-            {
-                result.kasumi_module_ids.len()
-            }
-            #[cfg(not(feature = "kasumi"))]
-            {
-                0usize
-            }
-        }
+        result.kasumi_count()
     );
 
     let blacklisted_count = config
@@ -61,16 +52,7 @@ pub fn finalize(
         config.kasumi.enabled,
         result.overlay_module_ids.len(),
         result.magic_module_ids.len(),
-        {
-            #[cfg(feature = "kasumi")]
-            {
-                result.kasumi_module_ids.len()
-            }
-            #[cfg(not(feature = "kasumi"))]
-            {
-                0usize
-            }
-        },
+        result.kasumi_count(),
         blacklisted_count,
     );
 

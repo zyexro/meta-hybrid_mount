@@ -88,6 +88,13 @@ impl uapi::kasumi_syscall_arg {
 
 pub type KasumiSyscallListArg = uapi::kasumi_syscall_list_arg;
 
+/// Zero-initialized `Default` for `#[repr(C)]` bindgen ioctl structs.
+///
+/// # Safety
+///
+/// Only used with C-compatible structs whose fields are exclusively integers
+/// and `c_char` arrays. The all-zeroes bit pattern is a valid representation
+/// for every field of these types.
 macro_rules! impl_zeroed_default {
     ($t:ty) => {
         impl Default for $t {
