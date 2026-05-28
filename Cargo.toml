@@ -23,7 +23,7 @@ edition = "2024"
 description = "Waiting for daemon..."
 authors = ["Hybrid Mount Developers"]
 license = "Apache-2.0"
-readme = "docs/README.md"
+readme = "README.md"
 repository = "https://github.com/Hybrid-Mount/meta-hybrid_mount"
 
 [package.metadata.hybrid_mount]
