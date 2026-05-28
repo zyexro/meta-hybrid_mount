@@ -229,7 +229,8 @@ function buildMockModules(): Module[] {
       name: "Play Integrity Fix",
       version: "14.2",
       author: "chiteroman",
-      description: "Mirror-backed Kasumi module for passing Play Integrity checks.",
+      description:
+        "Mirror-backed Kasumi module for passing Play Integrity checks.",
       mode: "kasumi",
       is_mounted: true,
       enabled: true,
