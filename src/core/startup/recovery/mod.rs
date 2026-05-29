@@ -15,6 +15,7 @@
 mod retry_state;
 mod skip_markers;
 
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -30,6 +31,9 @@ use crate::{
 
 pub fn run(config: Config) -> Result<Config> {
     let mut state = RecoveryState::new(&config)?;
+    // Only read / written on Linux / Android; silenced on macOS to keep
+    // clippy happy when checking the crate on the host.
+    #[allow(unused_assignments, unused_variables)]
     let mut prev_mnt_base: Option<std::path::PathBuf> = None;
 
     loop {
@@ -77,7 +81,10 @@ pub fn run(config: Config) -> Result<Config> {
             Err(e) => {
                 // Save this mount base so the next retry can clean up stale
                 // overlays and loop devices left by this attempt.
-                prev_mnt_base = Some(mnt_base);
+                #[allow(unused_assignments)]
+                {
+                    prev_mnt_base = Some(mnt_base);
+                }
                 if let Some(module_failure) = e.downcast_ref::<ModuleStageFailure>() {
                     if module_failure.module_ids.is_empty() {
                         match state.handle_unattributed_failure(module_failure.stage.to_string()) {
@@ -186,15 +193,16 @@ fn cleanup_stale_attempt(prev_mnt_base: &Path, current_mnt_base: &Path) {
         }
     }
 
-    if prev_mnt_base != current_mnt_base && prev_mnt_base.exists() {
-        if let Err(e) = std::fs::remove_dir(prev_mnt_base) {
-            crate::scoped_log!(
-                debug,
-                "recovery",
-                "cleanup stale mount dir: path={}, error={:#}",
-                prev_mnt_base.display(),
-                e
-            );
-        }
+    if prev_mnt_base != current_mnt_base
+        && prev_mnt_base.exists()
+        && let Err(e) = std::fs::remove_dir(prev_mnt_base)
+    {
+        crate::scoped_log!(
+            debug,
+            "recovery",
+            "cleanup stale mount dir: path={}, error={:#}",
+            prev_mnt_base.display(),
+            e
+        );
     }
 }

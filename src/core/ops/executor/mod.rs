@@ -259,10 +259,10 @@ impl Executor {
         let kasumi_runtime_enabled = false;
 
         #[cfg(any(target_os = "linux", target_os = "android"))]
-        if !config.disable_umount {
-            if let Err(e) = umount_mgr::commit() {
-                crate::scoped_log!(warn, "executor", "umount_mgr commit failed: {:#}", e);
-            }
+        if !config.disable_umount
+            && let Err(e) = umount_mgr::commit()
+        {
+            crate::scoped_log!(warn, "executor", "umount_mgr commit failed: {:#}", e);
         }
 
         let result_overlay: Vec<String> = final_overlay_ids.into_iter().collect();

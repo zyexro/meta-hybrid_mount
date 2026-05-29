@@ -67,14 +67,17 @@ fn build_dtype(path: &Path) -> Result<(i32, bool)> {
         return Ok((libc::DT_UNKNOWN as i32, true));
     }
 
-    let d_type = match metadata.mode() & libc::S_IFMT {
-        libc::S_IFREG => libc::DT_REG as i32,
-        libc::S_IFLNK => libc::DT_LNK as i32,
-        libc::S_IFDIR => libc::DT_DIR as i32,
-        libc::S_IFBLK => libc::DT_BLK as i32,
-        libc::S_IFCHR => libc::DT_CHR as i32,
-        libc::S_IFIFO => libc::DT_FIFO as i32,
-        libc::S_IFSOCK => libc::DT_SOCK as i32,
+    // libc file-type constants are u16 on some platforms (macOS) but
+    // MetadataExt::mode() always returns u32 — cast so the match compiles
+    // everywhere.
+    let d_type = match metadata.mode() & (libc::S_IFMT as u32) {
+        x if x == libc::S_IFREG as u32 => libc::DT_REG as i32,
+        x if x == libc::S_IFLNK as u32 => libc::DT_LNK as i32,
+        x if x == libc::S_IFDIR as u32 => libc::DT_DIR as i32,
+        x if x == libc::S_IFBLK as u32 => libc::DT_BLK as i32,
+        x if x == libc::S_IFCHR as u32 => libc::DT_CHR as i32,
+        x if x == libc::S_IFIFO as u32 => libc::DT_FIFO as i32,
+        x if x == libc::S_IFSOCK as u32 => libc::DT_SOCK as i32,
         _ => libc::DT_UNKNOWN as i32,
     };
 
