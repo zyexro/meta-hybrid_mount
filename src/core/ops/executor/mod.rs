@@ -18,6 +18,8 @@ mod overlay;
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::{Result, bail};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use rustix::mount::{UnmountFlags, unmount as umount};
 
 #[cfg(feature = "kasumi")]
 use crate::core::kasumi_coordinator::KasumiCoordinator;
@@ -126,6 +128,13 @@ impl Executor {
                     op.target,
                     op.lowerdirs.len()
                 );
+
+                // If the target is already an overlay mount (e.g. left over
+                // from a previous failed recovery attempt), detach it first so
+                // the new overlay references the current ext4 image path.
+                #[cfg(any(target_os = "linux", target_os = "android"))]
+                detach_stale_overlay_if_present(&op.target);
+
                 #[cfg(feature = "kasumi")]
                 let overlay_result = overlay::mount_overlay(op, config, &kasumi);
                 #[cfg(not(feature = "kasumi"))]
@@ -314,4 +323,30 @@ fn collect_involved_modules(op: &OverlayOperation) -> Vec<String> {
     involved_modules.sort();
     involved_modules.dedup();
     involved_modules
+}
+
+/// If `target` is already an overlay mount (e.g. leftover from a previous
+/// failed recovery retry), detach it so the fresh overlay can be mounted
+/// with the correct lowerdir paths.
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn detach_stale_overlay_if_present(target: &str) {
+    if !crate::sys::mount::is_mounted(target) {
+        return;
+    }
+
+    crate::scoped_log!(
+        warn,
+        "executor",
+        "detaching stale overlay before remount: target={}",
+        target
+    );
+    if let Err(e) = umount(target, UnmountFlags::DETACH) {
+        crate::scoped_log!(
+            warn,
+            "executor",
+            "detach stale overlay failed: target={}, error={:#}",
+            target,
+            e
+        );
+    }
 }

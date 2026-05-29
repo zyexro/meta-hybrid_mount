@@ -100,7 +100,7 @@ fn connect_socket() -> Result<UnixStream> {
 fn should_wake_daemon(err: &anyhow::Error) -> bool {
     if matches!(
         std::env::var("HYBRID_MOUNT_NO_DAEMON_AUTOWAKE").as_deref(),
-        Ok("1") | Ok("true") | Ok("yes")
+        Ok("1" | "true" | "yes")
     ) {
         return false;
     }
