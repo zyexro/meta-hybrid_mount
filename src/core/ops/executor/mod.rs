@@ -267,6 +267,10 @@ impl Executor {
 
         let result_overlay: Vec<String> = final_overlay_ids.into_iter().collect();
         let result_magic: Vec<String> = final_magic_ids.into_iter().collect();
+        #[cfg(not(feature = "kasumi"))]
+        let kasumi_count = 0usize;
+        #[cfg(feature = "kasumi")]
+        let kasumi_count = final_kasumi_ids.len();
 
         crate::scoped_log!(
             info,
@@ -274,7 +278,7 @@ impl Executor {
             "complete: overlay_modules={}, magic_modules={}, kasumi_modules={}",
             result_overlay.len(),
             result_magic.len(),
-            final_kasumi_ids.len()
+            kasumi_count
         );
 
         Ok(ExecutionResult {
