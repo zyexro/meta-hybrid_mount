@@ -111,6 +111,61 @@ pub fn commit() -> Result<()> {
     Ok(())
 }
 
+/// Detach a single mount point immediately using KSU's TryUmount.
+/// Best-effort: non-KSU environments are a no-op; failures are logged at
+/// warn level without propagating.
+pub fn detach_path<P>(target: P)
+where
+    P: AsRef<Path>,
+{
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        let _ = target;
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        if !crate::utils::KSU.load(std::sync::atomic::Ordering::Relaxed) {
+            return;
+        }
+
+        let path = target.as_ref();
+        let Ok(path_str) = path.as_str() else {
+            crate::scoped_log!(
+                warn,
+                "umount",
+                "detach_path skipped: path={}, reason=non_utf8",
+                path.display()
+            );
+            return;
+        };
+
+        if is_ignored_partition(path_str) {
+            crate::scoped_log!(
+                debug,
+                "umount",
+                "detach_path skipped: path={}, reason=ignore_unmount_partition",
+                path_str
+            );
+            return;
+        }
+
+        let mut tu = TryUmount::new();
+        tu.add(path);
+        tu.flags(TryUmountFlags::MNT_DETACH);
+        tu.format_msg(|p| format!("{p:?} umount successful "));
+        if let Err(err) = tu.umount() {
+            crate::scoped_log!(
+                warn,
+                "umount",
+                "detach_path failed: path={}, error={:#}",
+                path_str,
+                err
+            );
+        }
+    }
+}
+
 #[cfg(test)]
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod tests {

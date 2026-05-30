@@ -26,8 +26,6 @@ use rustix::mount::{MountPropagationFlags, UnmountFlags, mount_change, unmount a
 use crate::defs;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 use crate::mount::umount_mgr::send_umountable;
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use crate::sys::mount::is_mounted;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageMode {
@@ -97,7 +95,6 @@ pub fn setup_with_sources(
     img_path: &Path,
 ) -> Result<StorageHandle> {
     reset_image_files(img_path)?;
-    detach_existing_mount(mnt_base);
 
     #[cfg(feature = "control-plane")]
     if !force_ext4 && try_setup_tmpfs(mnt_base, mount_source)? {
@@ -156,26 +153,6 @@ fn remove_image_file(path: &Path) -> Result<()> {
             Ok(())
         }
         Err(err) => Err(err.into()),
-    }
-}
-
-fn detach_existing_mount(mnt_base: &Path) {
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
-    {
-        let _ = mnt_base;
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    if is_mounted(mnt_base)
-        && let Err(e) = umount(mnt_base, UnmountFlags::DETACH)
-    {
-        crate::scoped_log!(
-            warn,
-            "storage",
-            "failed to detach existing mount at {}: {:#}",
-            mnt_base.display(),
-            e
-        );
     }
 }
 

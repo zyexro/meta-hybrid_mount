@@ -43,6 +43,10 @@ fn mount_overlay_inner(
     kasumi: Option<&KasumiCoordinator<'_>>,
 ) -> Result<Vec<String>> {
     mount_overlay_base(op, config)?;
+    // Best-effort: hide overlay xattrs so that files under this mount point
+    // don't expose `trusted.overlay.*` extended attributes to userspace.
+    // The coordinator logs failures internally; a failure here must not abort
+    // the overlay mount that already succeeded.
     if let Some(kasumi) = kasumi {
         kasumi.hide_overlay_xattrs(Path::new(&op.target));
     }

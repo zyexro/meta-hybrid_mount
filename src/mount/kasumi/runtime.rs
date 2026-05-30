@@ -467,7 +467,7 @@ pub fn apply_runtime_config(config: &config::Config) -> Result<bool> {
     apply_spoof_settings(config, features)?;
     kasumi::set_enabled(true)?;
     if let Err(err) = kasumi::fix_mounts() {
-        crate::scoped_log!(debug, "mount:kasumi", "fix_mounts skipped: error={:#}", err);
+        crate::scoped_log!(warn, "mount:kasumi", "fix_mounts failed: error={:#}", err);
     }
     Ok(true)
 }
@@ -548,7 +548,7 @@ pub fn apply(plan: &mut MountPlan, modules: &[Module], config: &config::Config) 
 
     kasumi::set_enabled(runtime_requested)?;
     if runtime_requested && let Err(err) = kasumi::fix_mounts() {
-        crate::scoped_log!(debug, "mount:kasumi", "fix_mounts skipped: error={:#}", err);
+        crate::scoped_log!(warn, "mount:kasumi", "fix_mounts failed: error={:#}", err);
     }
 
     crate::scoped_log!(
