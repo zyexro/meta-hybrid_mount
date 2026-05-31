@@ -1,6 +1,8 @@
 use std::{env, fs, path::PathBuf};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::Result;
+#[cfg(feature = "kasumi")]
+use anyhow::{Context, anyhow};
 
 #[path = "xtask/src/build_meta_shared.rs"]
 mod build_meta_shared;

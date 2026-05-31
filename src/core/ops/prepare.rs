@@ -804,6 +804,7 @@ mod tests {
 
         assert_eq!(plan.overlay_ops.len(), 1);
         assert_eq!(plan.magic_module_ids, Vec::<String>::new());
+        #[cfg(feature = "kasumi")]
         assert_eq!(plan.kasumi_module_ids, Vec::<String>::new());
         assert!(storage.join("foo/system/bin/sh").exists());
         assert_eq!(
@@ -843,6 +844,7 @@ mod tests {
 
         assert!(plan.overlay_ops.is_empty());
         assert_eq!(plan.magic_module_ids, vec!["foo".to_string()]);
+        #[cfg(feature = "kasumi")]
         assert_eq!(plan.kasumi_module_ids, Vec::<String>::new());
         assert!(storage.join("foo/system/bin/sh").exists());
     }
@@ -871,6 +873,7 @@ mod tests {
 
         assert!(plan.overlay_ops.is_empty());
         assert!(plan.magic_module_ids.is_empty());
+        #[cfg(feature = "kasumi")]
         assert!(plan.kasumi_module_ids.is_empty());
         assert!(!storage.join("foo").exists());
     }
@@ -897,6 +900,7 @@ mod tests {
 
         assert!(plan.overlay_ops.is_empty());
         assert!(plan.magic_module_ids.is_empty());
+        #[cfg(feature = "kasumi")]
         assert!(plan.kasumi_module_ids.is_empty());
         assert!(!storage.join("foo").exists());
     }

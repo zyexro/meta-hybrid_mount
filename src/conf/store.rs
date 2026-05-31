@@ -17,6 +17,8 @@ use std::{fs, path::Path};
 use anyhow::{Context, Result};
 
 use crate::conf::schema::Config;
+#[cfg(feature = "control-plane")]
+use crate::sys::fs::atomic_write;
 
 #[cfg(feature = "control-plane")]
 fn ensure_parent_dir(path: &Path) -> Result<()> {
@@ -83,8 +85,29 @@ impl Config {
                 )
             })?;
         }
-        fs::write(main_path, content)
+        atomic_write(main_path, content)
             .with_context(|| format!("failed to write config file {}", main_path.display()))?;
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "control-plane"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn save_to_file_replaces_existing_config_and_keeps_backup() {
+        let temp = tempfile::tempdir().unwrap();
+        let config_path = temp.path().join("config.toml");
+        fs::write(&config_path, "default_mode = \"magic\"\n").unwrap();
+
+        let config = Config::default();
+        config.save_to_file(&config_path).unwrap();
+
+        let saved = fs::read_to_string(&config_path).unwrap();
+        assert!(saved.contains("default_mode = \"overlay\""));
+
+        let backup = fs::read_to_string(temp.path().join("config.toml.bak")).unwrap();
+        assert!(backup.contains("default_mode = \"magic\""));
     }
 }

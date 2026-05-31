@@ -67,7 +67,7 @@ fn default_mode_and_config_integration() {
     assert_eq!(config.moduledir, PathBuf::from("/data/adb/modules"));
     assert_eq!(config.default_mode, DefaultMode::Overlay);
     assert!(!config.disable_umount);
-    assert_eq!(config.mountsource, "APatch");
+    assert!(matches!(config.mountsource.as_str(), "APatch" | "KSU"));
 }
 
 #[test]

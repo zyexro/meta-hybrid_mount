@@ -66,15 +66,31 @@ pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, content: C) -> Resu
             )
         })?;
 
-    tempfile.write_all(content.as_ref())?;
-    tempfile.flush()?;
+    tempfile
+        .write_all(content.as_ref())
+        .with_context(|| format!("failed to write temp file for {}", path.display()))?;
+    tempfile
+        .flush()
+        .with_context(|| format!("failed to flush temp file for {}", path.display()))?;
+    tempfile
+        .as_file()
+        .sync_all()
+        .with_context(|| format!("failed to sync temp file for {}", path.display()))?;
 
     tempfile
         .persist(path)
         .map(|_| ())
         .with_context(|| format!("failed to atomically replace {}", path.display()))?;
 
+    sync_parent_dir(parent);
+
     Ok(())
+}
+
+fn sync_parent_dir(parent: &Path) {
+    if let Ok(dir) = File::open(parent) {
+        let _ = dir.sync_all();
+    }
 }
 
 pub fn ensure_dir_exists<T: AsRef<Path>>(dir: T) -> Result<()> {

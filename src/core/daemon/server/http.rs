@@ -360,9 +360,7 @@ fn handle_http_request(
     let close_after_response = request.close_after_response;
     let request: super::super::protocol::DaemonRequest =
         serde_json::from_slice(&request.body).context("Failed to parse WebUI daemon request")?;
-    let config_path = request
-        .config_path
-        .unwrap_or_else(|| PathBuf::from(defs::CONFIG_FILE));
+    let config_path = PathBuf::from(defs::CONFIG_FILE);
     let effective_config = super::commands::load_runtime_config(config_cache, &config_path)?;
     let ctx = super::commands::CommandContext::new(
         &effective_config,

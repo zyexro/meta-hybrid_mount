@@ -52,9 +52,13 @@ jobs:
       - name: Format codes
         run: cargo fmt --all -- --check
       - name: Clippy code
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Run unit tests
-        run: cargo test --all-targets --workspace
+        run: cargo test --workspace --all-features
+      - name: Check lite feature set
+        run: cargo test -p hybrid-mount --no-default-features --features control-plane --lib
+      - name: Check nano feature set
+        run: cargo test -p hybrid-mount --no-default-features --lib
 
   webui-lints:
     runs-on: ubuntu-latest
