@@ -67,21 +67,25 @@ fn build_dtype(path: &Path) -> Result<(i32, bool)> {
         return Ok((libc::DT_UNKNOWN as i32, true));
     }
 
-    // libc file-type constants are u16 on some platforms (macOS) but
-    // MetadataExt::mode() always returns u32 — cast so the match compiles
-    // everywhere.
-    let d_type = match metadata.mode() & (libc::S_IFMT as u32) {
-        x if x == libc::S_IFREG as u32 => libc::DT_REG as i32,
-        x if x == libc::S_IFLNK as u32 => libc::DT_LNK as i32,
-        x if x == libc::S_IFDIR as u32 => libc::DT_DIR as i32,
-        x if x == libc::S_IFBLK as u32 => libc::DT_BLK as i32,
-        x if x == libc::S_IFCHR as u32 => libc::DT_CHR as i32,
-        x if x == libc::S_IFIFO as u32 => libc::DT_FIFO as i32,
-        x if x == libc::S_IFSOCK as u32 => libc::DT_SOCK as i32,
-        _ => libc::DT_UNKNOWN as i32,
+    let d_type = if file_type.is_file() {
+        libc::DT_REG
+    } else if file_type.is_symlink() {
+        libc::DT_LNK
+    } else if file_type.is_dir() {
+        libc::DT_DIR
+    } else if file_type.is_block_device() {
+        libc::DT_BLK
+    } else if file_type.is_char_device() {
+        libc::DT_CHR
+    } else if file_type.is_fifo() {
+        libc::DT_FIFO
+    } else if file_type.is_socket() {
+        libc::DT_SOCK
+    } else {
+        libc::DT_UNKNOWN
     };
 
-    Ok((d_type, false))
+    Ok((d_type as i32, false))
 }
 
 pub(super) fn log_compiled_rule_summary(compiled: &CompiledRules, user_hide_paths: &[PathBuf]) {

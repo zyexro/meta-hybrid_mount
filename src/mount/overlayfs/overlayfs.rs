@@ -245,16 +245,6 @@ pub fn mount_overlayfs(
     result
 }
 
-#[cfg(test)]
-mod tests {
-    use super::escape_mount_option_value;
-
-    #[test]
-    fn escape_mount_option_value_escapes_overlay_separators() {
-        assert_eq!(escape_mount_option_value("/a,b:/c\\d"), "/a\\,b\\:/c\\\\d");
-    }
-}
-
 pub fn bind_mount(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {
     crate::scoped_log!(
         info,
@@ -446,4 +436,14 @@ pub fn mount_overlay(
         std::env::set_current_dir(&cwd).ok();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_mount_option_value;
+
+    #[test]
+    fn escape_mount_option_value_escapes_overlay_separators() {
+        assert_eq!(escape_mount_option_value("/a,b:/c\\d"), "/a\\,b\\:/c\\\\d");
+    }
 }
