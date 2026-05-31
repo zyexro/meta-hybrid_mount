@@ -393,6 +393,7 @@ impl MagicMount {
                 if has_tmpfs {
                     return Err(wrap_with_module_context(e, node));
                 }
+                let failed_module_ids = infer_module_ids(node);
                 crate::scoped_log!(
                     error,
                     "magic",
@@ -402,6 +403,10 @@ impl MagicMount {
                     e
                 );
                 context.record_failed_node(node);
+                if !failed_module_ids.is_empty() {
+                    return Err(ModuleStageFailure::execute(failed_module_ids, e).into());
+                }
+                return Err(e);
             }
         }
 
@@ -504,6 +509,12 @@ impl MagicMount {
                 } else {
                     context.stats.record_failed();
                 }
+                if !context.failed_module_ids.is_empty() {
+                    let mut ids: Vec<String> = context.failed_module_ids.iter().cloned().collect();
+                    ids.sort();
+                    return Err(ModuleStageFailure::execute(ids, e).into());
+                }
+                return Err(e);
             }
         }
 

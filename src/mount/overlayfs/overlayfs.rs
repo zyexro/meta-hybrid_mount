@@ -140,14 +140,14 @@ fn mount_overlay_core(
         dest,
     ) {
         crate::scoped_log!(warn, "overlayfs", "fsopen failed, fallback=mount: {:#}", e);
-        let safe_lower = lowerdir_config.replace(',', "\\,");
+        let safe_lower = escape_mount_option_value(&lowerdir_config);
         let mut data = format!("lowerdir={safe_lower}");
 
         if let (Some(upperdir), Some(workdir)) = (upperdir_s, workdir_s) {
             data = format!(
                 "{data},upperdir={},workdir={}",
-                upperdir.replace(',', "\\,"),
-                workdir.replace(',', "\\,")
+                escape_mount_option_value(&upperdir),
+                escape_mount_option_value(&workdir)
             );
         }
         mount(
@@ -159,6 +159,17 @@ fn mount_overlay_core(
         )?;
     }
     Ok(())
+}
+
+fn escape_mount_option_value(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        if matches!(ch, '\\' | ',' | ':') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped
 }
 
 pub fn mount_overlayfs(
@@ -232,6 +243,16 @@ pub fn mount_overlayfs(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_mount_option_value;
+
+    #[test]
+    fn escape_mount_option_value_escapes_overlay_separators() {
+        assert_eq!(escape_mount_option_value("/a,b:/c\\d"), "/a\\,b\\:/c\\\\d");
+    }
 }
 
 pub fn bind_mount(from: impl AsRef<Path>, to: impl AsRef<Path>) -> Result<()> {

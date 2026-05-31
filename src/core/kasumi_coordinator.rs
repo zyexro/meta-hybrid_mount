@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Result, bail};
 
@@ -88,9 +91,10 @@ impl<'a> KasumiCoordinator<'a> {
             self.config.kasumi.mirror_path.display(),
             kasumi_modules.len()
         );
+        let mirror_path = validate_mirror_path(&self.config.kasumi.mirror_path)?;
 
         let kasumi_storage = storage::setup_with_sources(
-            &self.config.kasumi.mirror_path,
+            &mirror_path,
             &kasumi_sources,
             matches!(self.config.overlay_mode, OverlayMode::Ext4),
             &self.config.mountsource,
@@ -136,5 +140,69 @@ impl<'a> KasumiCoordinator<'a> {
                 err
             );
         }
+    }
+}
+
+fn validate_mirror_path(path: &Path) -> Result<PathBuf> {
+    if !path.is_absolute() {
+        bail!("Kasumi mirror_path must be absolute: {}", path.display());
+    }
+
+    let normalized = crate::utils::normalize_path(path);
+    let default = Path::new(defs::KASUMI_MIRROR_DIR);
+    if normalized == default {
+        return Ok(normalized);
+    }
+
+    let allowed_parent = Path::new("/dev");
+    if normalized.parent() == Some(allowed_parent)
+        && normalized
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.starts_with("kasumi_mirror"))
+    {
+        return Ok(normalized);
+    }
+
+    bail!(
+        "Kasumi mirror_path must be {} or /dev/kasumi_mirror*: {}",
+        defs::KASUMI_MIRROR_DIR,
+        path.display()
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::validate_mirror_path;
+    use crate::defs;
+
+    #[test]
+    fn validate_mirror_path_accepts_default() {
+        assert_eq!(
+            validate_mirror_path(Path::new(defs::KASUMI_MIRROR_DIR)).unwrap(),
+            Path::new(defs::KASUMI_MIRROR_DIR)
+        );
+    }
+
+    #[test]
+    fn validate_mirror_path_accepts_dev_kasumi_prefix() {
+        assert_eq!(
+            validate_mirror_path(Path::new("/dev/kasumi_mirror_test")).unwrap(),
+            Path::new("/dev/kasumi_mirror_test")
+        );
+    }
+
+    #[test]
+    fn validate_mirror_path_rejects_root_and_system_paths() {
+        assert!(validate_mirror_path(Path::new("/")).is_err());
+        assert!(validate_mirror_path(Path::new("/system")).is_err());
+        assert!(validate_mirror_path(Path::new("/data/adb/kasumi_mirror")).is_err());
+    }
+
+    #[test]
+    fn validate_mirror_path_rejects_relative_paths() {
+        assert!(validate_mirror_path(Path::new("kasumi_mirror")).is_err());
     }
 }

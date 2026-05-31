@@ -19,6 +19,8 @@ use std::{collections::BTreeSet, path::Path};
 
 use anyhow::{Result, bail};
 #[cfg(any(target_os = "linux", target_os = "android"))]
+use procfs::process::Process;
+#[cfg(any(target_os = "linux", target_os = "android"))]
 use rustix::mount::{UnmountFlags, unmount as umount};
 
 #[cfg(feature = "kasumi")]
@@ -133,7 +135,7 @@ impl Executor {
                 // from a previous failed recovery attempt), detach it first so
                 // the new overlay references the current ext4 image path.
                 #[cfg(any(target_os = "linux", target_os = "android"))]
-                detach_stale_overlay_if_present(&op.target);
+                detach_stale_overlay_if_present(&op.target, config);
 
                 #[cfg(feature = "kasumi")]
                 let overlay_result = overlay::mount_overlay(op, config, &kasumi);
@@ -333,8 +335,8 @@ fn collect_involved_modules(op: &OverlayOperation) -> Vec<String> {
 /// failed recovery retry), detach it so the fresh overlay can be mounted
 /// with the correct lowerdir paths.
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn detach_stale_overlay_if_present(target: &str) {
-    if !crate::sys::mount::is_mounted(target) {
+fn detach_stale_overlay_if_present(target: &str, config: &config::Config) {
+    if !is_hybrid_overlay_mount(target, config) {
         return;
     }
 
@@ -353,4 +355,53 @@ fn detach_stale_overlay_if_present(target: &str) {
             e
         );
     }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn is_hybrid_overlay_mount(target: &str, config: &config::Config) -> bool {
+    let Ok(process) = Process::myself() else {
+        crate::scoped_log!(
+            debug,
+            "executor",
+            "stale overlay probe skipped: target={}, reason=process_unavailable",
+            target
+        );
+        return false;
+    };
+    let Ok(mountinfo) = process.mountinfo() else {
+        crate::scoped_log!(
+            debug,
+            "executor",
+            "stale overlay probe skipped: target={}, reason=mountinfo_unavailable",
+            target
+        );
+        return false;
+    };
+
+    mountinfo.into_iter().any(|mount| {
+        mount.mount_point.to_string_lossy() == target
+            && mount.fs_type == "overlay"
+            && overlay_source_matches(&mount.mount_source, &config.mountsource)
+            && overlay_options_have_hybrid_marker(&mount.super_options)
+    })
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn overlay_source_matches(source: &Option<String>, configured_source: &str) -> bool {
+    source
+        .as_deref()
+        .is_some_and(|source| source == configured_source || source == "overlay")
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn overlay_options_have_hybrid_marker(
+    options: &std::collections::HashMap<String, Option<String>>,
+) -> bool {
+    ["lowerdir", "upperdir", "workdir"]
+        .into_iter()
+        .filter_map(|key| options.get(key).and_then(Option::as_deref))
+        .any(|value| {
+            value.contains(crate::defs::HYBRID_MOUNT_DIR)
+                || value.split(':').any(|path| path.starts_with("/mnt/"))
+        })
 }
