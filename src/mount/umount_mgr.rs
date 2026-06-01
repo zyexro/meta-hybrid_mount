@@ -57,9 +57,9 @@ where
         }
 
         let target = target.as_ref();
-        let path = target.as_str()?;
+        let path = normalize_umount_path(target.as_str()?);
 
-        if is_ignored_partition(path) {
+        if is_ignored_partition(&path) {
             crate::scoped_log!(
                 debug,
                 "umount",
@@ -73,14 +73,24 @@ where
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock history mutex"))?;
 
-        if !history.insert(path.to_string()) {
+        if !history.insert(path.clone()) {
             return Ok(());
         }
 
         LIST.lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock umount list"))?
-            .add(target);
+            .add(Path::new(&path));
         Ok(())
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn normalize_umount_path(path: &str) -> String {
+    let path = path.trim_end_matches('/');
+    if path.is_empty() {
+        "/".to_string()
+    } else {
+        path.to_string()
     }
 }
 
@@ -97,70 +107,25 @@ pub fn commit() -> Result<()> {
     list.flags(TryUmountFlags::MNT_DETACH);
     if let Err(e2) = list.umount() {
         crate::scoped_log!(warn, "umount", "commit failed: {:#}", e2);
+    } else {
+        *list = TryUmount::new();
     }
 
     Ok(())
 }
 
-/// Detach a single mount point immediately using KSU's TryUmount.
-/// Best-effort: non-KSU environments are a no-op; failures are logged at
-/// warn level without propagating.
-pub fn detach_path<P>(target: P)
-where
-    P: AsRef<Path>,
-{
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
-    {
-        let _ = target;
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    {
-        if !crate::utils::KSU.load(std::sync::atomic::Ordering::Relaxed) {
-            return;
-        }
-
-        let path = target.as_ref();
-        let Ok(path_str) = path.as_str() else {
-            crate::scoped_log!(
-                warn,
-                "umount",
-                "detach_path skipped: path={}, reason=non_utf8",
-                path.display()
-            );
-            return;
-        };
-
-        if is_ignored_partition(path_str) {
-            crate::scoped_log!(
-                debug,
-                "umount",
-                "detach_path skipped: path={}, reason=ignore_unmount_partition",
-                path_str
-            );
-            return;
-        }
-
-        let mut tu = TryUmount::new();
-        tu.add(path);
-        tu.flags(TryUmountFlags::MNT_DETACH);
-        tu.format_msg(|p| format!("{p:?} umount successful "));
-        if let Err(err) = tu.umount() {
-            crate::scoped_log!(
-                warn,
-                "umount",
-                "detach_path failed: path={}, error={:#}",
-                path_str,
-                err
-            );
-        }
-    }
-}
-
 #[cfg(test)]
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod tests {
-    use super::is_ignored_partition;
+    use super::{is_ignored_partition, normalize_umount_path};
+
+    #[test]
+    fn normalizes_equivalent_umount_paths() {
+        assert_eq!(normalize_umount_path("/system/bin/"), "/system/bin");
+        assert_eq!(normalize_umount_path("/system/bin///"), "/system/bin");
+        assert_eq!(normalize_umount_path("/"), "/");
+        assert_eq!(normalize_umount_path("///"), "/");
+    }
 
     #[test]
     fn skips_exact_ignored_partition() {

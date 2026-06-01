@@ -329,11 +329,6 @@ fn clean_up_path(
         "cleanup: remove={}",
         tempdir.display()
     );
-    // Best-effort: detach the backing mount via KSU's TryUmount so that
-    // remove_path can actually delete the directory.  Failure is logged
-    // internally by detach_path; we proceed regardless (EBUSY is tolerated
-    // by remove_path).
-    crate::mount::umount_mgr::detach_path(tempdir);
     remove_path(tempdir)?;
 
     crate::core::storage::cleanup_artifacts(storage_mode)?;
