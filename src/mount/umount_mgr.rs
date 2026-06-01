@@ -29,9 +29,48 @@ use rustix::path::Arg;
 use crate::defs;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub static LIST: LazyLock<Mutex<TryUmount>> = LazyLock::new(|| Mutex::new(TryUmount::new()));
+pub static QUEUE: LazyLock<Mutex<UmountQueue>> = LazyLock::new(|| Mutex::new(UmountQueue::new()));
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
-static HISTORY: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+pub struct UmountQueue {
+    list: TryUmount,
+    pending: HashSet<String>,
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+impl UmountQueue {
+    fn new() -> Self {
+        Self {
+            list: TryUmount::new(),
+            pending: HashSet::new(),
+        }
+    }
+
+    fn add(&mut self, path: &str) -> bool {
+        if !self.pending.insert(path.to_string()) {
+            return false;
+        }
+        self.list.add(Path::new(path));
+        true
+    }
+
+    fn is_empty(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    fn commit(&mut self) -> Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+
+        self.list
+            .format_msg(|p| format!("{p:?} umount successful "));
+        self.list.flags(TryUmountFlags::MNT_DETACH);
+        self.list.umount()?;
+        *self = Self::new();
+        Ok(())
+    }
+}
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn is_ignored_partition(path: &str) -> bool {
@@ -69,28 +108,45 @@ where
             return Ok(());
         }
 
-        let mut history = HISTORY
+        let mut queue = QUEUE
             .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock history mutex"))?;
+            .map_err(|_| anyhow::anyhow!("Failed to lock umount queue"))?;
 
-        if !history.insert(path.clone()) {
+        if !queue.add(&path) {
             return Ok(());
         }
 
-        LIST.lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock umount list"))?
-            .add(Path::new(&path));
         Ok(())
     }
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn normalize_umount_path(path: &str) -> String {
-    let path = path.trim_end_matches('/');
-    if path.is_empty() {
+    let mut normalized = String::new();
+    for component in Path::new(path).components() {
+        match component {
+            std::path::Component::RootDir => normalized.push('/'),
+            std::path::Component::Normal(part) => {
+                if !normalized.ends_with('/') {
+                    normalized.push('/');
+                }
+                normalized.push_str(&part.to_string_lossy());
+            }
+            std::path::Component::CurDir => {}
+            _ => {
+                if !normalized.ends_with('/') {
+                    normalized.push('/');
+                }
+                normalized.push_str(component.as_os_str().to_string_lossy().as_ref());
+            }
+        }
+    }
+
+    let normalized = normalized.trim_end_matches('/');
+    if normalized.is_empty() {
         "/".to_string()
     } else {
-        path.to_string()
+        normalized.to_string()
     }
 }
 
@@ -99,16 +155,12 @@ pub fn commit() -> Result<()> {
     if !crate::utils::KSU.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok(());
     }
-    let mut list = LIST
+    let mut queue = QUEUE
         .lock()
-        .map_err(|_| anyhow::anyhow!("Failed to lock umount list"))?;
+        .map_err(|_| anyhow::anyhow!("Failed to lock umount queue"))?;
 
-    list.format_msg(|p| format!("{p:?} umount successful "));
-    list.flags(TryUmountFlags::MNT_DETACH);
-    if let Err(e2) = list.umount() {
+    if let Err(e2) = queue.commit() {
         crate::scoped_log!(warn, "umount", "commit failed: {:#}", e2);
-    } else {
-        *list = TryUmount::new();
     }
 
     Ok(())
@@ -117,14 +169,29 @@ pub fn commit() -> Result<()> {
 #[cfg(test)]
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod tests {
-    use super::{is_ignored_partition, normalize_umount_path};
+    use super::{UmountQueue, is_ignored_partition, normalize_umount_path};
 
     #[test]
     fn normalizes_equivalent_umount_paths() {
         assert_eq!(normalize_umount_path("/system/bin/"), "/system/bin");
         assert_eq!(normalize_umount_path("/system/bin///"), "/system/bin");
+        assert_eq!(normalize_umount_path("/system//bin"), "/system/bin");
+        assert_eq!(normalize_umount_path("/system/./bin"), "/system/bin");
         assert_eq!(normalize_umount_path("/"), "/");
         assert_eq!(normalize_umount_path("///"), "/");
+    }
+
+    #[test]
+    fn queue_dedupes_only_pending_paths() {
+        let mut queue = UmountQueue::new();
+
+        assert!(queue.add("/system/bin"));
+        assert!(!queue.add("/system/bin"));
+        assert!(queue.add("/system/xbin"));
+        assert!(!queue.is_empty());
+
+        queue = UmountQueue::new();
+        assert!(queue.add("/system/bin"));
     }
 
     #[test]
