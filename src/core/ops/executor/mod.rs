@@ -415,16 +415,25 @@ fn path_uses_hybrid_runtime_mount(path: &str) -> bool {
         return false;
     };
 
-    is_random_runtime_mount_name(name) || is_pid_runtime_mount_name(name)
+    is_prefixed_runtime_mount_name(name)
+        || is_legacy_random_runtime_mount_name(name)
+        || is_legacy_pid_runtime_mount_name(name)
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn is_random_runtime_mount_name(name: &str) -> bool {
+fn is_prefixed_runtime_mount_name(name: &str) -> bool {
+    name.strip_prefix("hm_").is_some_and(|suffix| {
+        is_legacy_random_runtime_mount_name(suffix) || is_legacy_pid_runtime_mount_name(suffix)
+    })
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn is_legacy_random_runtime_mount_name(name: &str) -> bool {
     name.len() == 10 && name.chars().all(|ch| ch.is_ascii_alphanumeric())
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn is_pid_runtime_mount_name(name: &str) -> bool {
+fn is_legacy_pid_runtime_mount_name(name: &str) -> bool {
     name.strip_prefix("mnt_")
         .is_some_and(|pid| !pid.is_empty() && pid.chars().all(|ch| ch.is_ascii_digit()))
 }
@@ -437,6 +446,12 @@ mod tests {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn hybrid_runtime_mount_marker_matches_generated_mount_paths() {
+        assert!(path_uses_hybrid_runtime_mount(
+            "/mnt/hm_7kYaSSqdFP/com.android.packageinstaller/system/priv-app"
+        ));
+        assert!(path_uses_hybrid_runtime_mount(
+            "/mnt/hm_mnt_12345/com.example/system"
+        ));
         assert!(path_uses_hybrid_runtime_mount(
             "/mnt/7kYaSSqdFP/com.android.packageinstaller/system/priv-app"
         ));

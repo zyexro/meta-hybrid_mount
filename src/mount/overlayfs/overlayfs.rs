@@ -328,6 +328,7 @@ fn mount_overlay_child(
     module_roots: &Vec<String>,
     stock_root: &String,
     mount_source: &str,
+    register_umountable: bool,
 ) -> Result<()> {
     if !module_roots
         .iter()
@@ -368,7 +369,7 @@ fn mount_overlay_child(
         );
         return Err(e);
     }
-    if let Err(e) = send_umountable(mount_point) {
+    if register_umountable && let Err(e) = send_umountable(mount_point) {
         crate::scoped_log!(
             warn,
             "overlayfs",
@@ -386,6 +387,7 @@ pub fn mount_overlay(
     workdir: Option<PathBuf>,
     upperdir: Option<PathBuf>,
     mount_source: &str,
+    register_umountable: bool,
 ) -> Result<()> {
     crate::scoped_log!(info, "overlayfs", "mount root: target={}", root);
     // Restore original CWD on exit — chdir is a process-global side effect.
@@ -417,6 +419,7 @@ pub fn mount_overlay(
             module_roots,
             &stock_root,
             mount_source,
+            register_umountable,
         ) {
             crate::scoped_log!(
                 warn,

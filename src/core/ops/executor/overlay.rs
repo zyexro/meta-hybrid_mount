@@ -106,6 +106,7 @@ fn mount_overlay_base(op: &OverlayOperation, config: &config::Config) -> Result<
         work_opt,
         upper_opt,
         &mount_source,
+        !config.disable_umount && !skip_ksu_umount,
     )?;
 
     crate::scoped_log!(

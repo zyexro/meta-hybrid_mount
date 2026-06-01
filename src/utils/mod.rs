@@ -32,7 +32,7 @@ macro_rules! scoped_log {
 
 pub fn get_mnt() -> PathBuf {
     for _ in 0..100 {
-        let mut name = String::new();
+        let mut name = String::from("hm_");
         for _ in 0..10 {
             name.push(fastrand::alphanumeric());
         }
@@ -41,8 +41,7 @@ pub fn get_mnt() -> PathBuf {
             return path;
         }
     }
-    // Fallback: use timestamp to avoid collision after exhausting random attempts
-    Path::new("/mnt").join(format!("mnt_{}", std::process::id()))
+    Path::new("/mnt").join(format!("hm_mnt_{}", std::process::id()))
 }
 
 pub fn init_logging() -> Result<()> {
@@ -82,4 +81,21 @@ pub fn init_logging() -> Result<()> {
         LOGGER_INIT.set(()).ok();
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_mnt;
+
+    #[test]
+    fn generated_mount_path_uses_hybrid_prefix() {
+        let path = get_mnt();
+        let name = path.file_name().and_then(|name| name.to_str()).unwrap();
+
+        assert_eq!(
+            path.parent().and_then(|parent| parent.to_str()),
+            Some("/mnt")
+        );
+        assert!(name.starts_with("hm_"));
+    }
 }

@@ -21,7 +21,12 @@ use std::{
 
 use anyhow::Result;
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use rustix::mount::{MountPropagationFlags, UnmountFlags, mount_change, unmount as umount};
+use rustix::mount::{MountPropagationFlags, mount_change};
+#[cfg(all(
+    feature = "control-plane",
+    any(target_os = "linux", target_os = "android")
+))]
+use rustix::mount::{UnmountFlags, unmount as umount};
 
 use crate::defs;
 
