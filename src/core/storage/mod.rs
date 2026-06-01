@@ -24,8 +24,6 @@ use anyhow::Result;
 use rustix::mount::{MountPropagationFlags, UnmountFlags, mount_change, unmount as umount};
 
 use crate::defs;
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use crate::mount::umount_mgr::send_umountable;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageMode {
@@ -169,13 +167,12 @@ fn finalize_mount_setup(path: &Path, disable_umount: bool) {
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    if !disable_umount && let Err(e) = send_umountable(path) {
+    if !disable_umount {
         crate::scoped_log!(
-            warn,
+            debug,
             "storage",
-            "failed to register umountable at {}: {:#}",
-            path.display(),
-            e
+            "skip register umountable: path={}, reason=live_overlay_lowerdir",
+            path.display()
         );
     }
 

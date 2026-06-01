@@ -60,6 +60,10 @@ pub fn should_skip_overlay_ksu_umount(path: &str, lowerdirs: &[impl AsRef<Path>]
     should_skip_ksu_umount(path) || overlay_contains_package_manager_etc(path, lowerdirs)
 }
 
+pub fn should_keep_existing_mount_before_overlay(path: &str) -> bool {
+    is_package_manager_scan_path(path)
+}
+
 fn has_ignored_umount_prefix(path: &str) -> bool {
     IGNORE_UMOUNT_PARTITIONS.iter().any(|ignored| {
         let ignored = ignored.trim_end_matches('/');
@@ -203,5 +207,17 @@ mod tests {
             "/my_company/overlay/CustomOplusFwkResOverlay.apk",
             &[lowerdir.as_path()]
         ));
+    }
+
+    #[test]
+    fn package_manager_scan_paths_keep_existing_mount_before_overlay() {
+        assert!(should_keep_existing_mount_before_overlay("/system/app"));
+        assert!(should_keep_existing_mount_before_overlay(
+            "/system/priv-app"
+        ));
+        assert!(should_keep_existing_mount_before_overlay(
+            "/product/overlay"
+        ));
+        assert!(!should_keep_existing_mount_before_overlay("/system/bin"));
     }
 }

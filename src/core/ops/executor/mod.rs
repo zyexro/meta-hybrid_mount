@@ -336,6 +336,16 @@ fn collect_involved_modules(op: &OverlayOperation) -> Vec<String> {
 /// with the correct lowerdir paths.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn detach_stale_overlay_if_present(target: &str, config: &config::Config) {
+    if crate::defs::should_keep_existing_mount_before_overlay(target) {
+        crate::scoped_log!(
+            debug,
+            "executor",
+            "stale overlay probe skipped: target={}, reason=package_manager_scan_path",
+            target
+        );
+        return;
+    }
+
     if !is_hybrid_overlay_mount(target, config) {
         return;
     }
