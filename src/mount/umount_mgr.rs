@@ -35,18 +35,9 @@ static HISTORY: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(H
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn is_ignored_partition(path: &str) -> bool {
-    // pairip-protected APKs (Play Integrity, etc.) verify native library backing
-    // after zygote forks; if KSU detaches our overlay over /system/lib*,
-    // /vendor/lib* in the app's namespace mid-flight, those checks crash with
-    // SIGSEGV in libpairipcore.so. Keep the overlay visible in the app namespace
-    // for these paths and rely on Kasumi/sus_mount to handle hiding instead.
-    defs::IGNORE_UMOUNT_PARTITIONS.iter().any(|ignored| {
-        let ignored = ignored.trim_end_matches('/');
-        path == ignored
-            || path
-                .strip_prefix(ignored)
-                .is_some_and(|rest| rest.starts_with('/'))
-    })
+    // Keep paths that app processes or PackageManager later dereference visible
+    // in their namespaces. KSU detach is still used for less fragile paths.
+    defs::should_skip_ksu_umount(path)
 }
 
 pub fn send_umountable<P>(target: P) -> Result<()>
@@ -186,6 +177,23 @@ mod tests {
     }
 
     #[test]
+    fn skips_package_manager_scan_paths() {
+        assert!(is_ignored_partition("/system/app"));
+        assert!(is_ignored_partition("/system/priv-app"));
+        assert!(is_ignored_partition("/product/app"));
+        assert!(is_ignored_partition("/product/priv-app/Example"));
+        assert!(is_ignored_partition("/product/overlay"));
+        assert!(is_ignored_partition(
+            "/my_company/overlay/CustomOplusFwkResOverlay.apk"
+        ));
+        assert!(is_ignored_partition("/system_ext/app"));
+        assert!(is_ignored_partition("/system_ext/etc/permissions"));
+        assert!(is_ignored_partition("/system/etc/sysconfig"));
+        assert!(is_ignored_partition("/system/etc/default-permissions"));
+        assert!(is_ignored_partition("/system/etc/preferred-apps"));
+    }
+
+    #[test]
     fn does_not_skip_siblings_with_shared_prefix() {
         // /system/lib should not match /system/lib_extra
         assert!(!is_ignored_partition("/system/lib_extra"));
@@ -197,6 +205,7 @@ mod tests {
     fn does_not_skip_unrelated_paths() {
         assert!(!is_ignored_partition("/product"));
         assert!(!is_ignored_partition("/system/etc"));
+        assert!(!is_ignored_partition("/system/etc/init"));
         assert!(!is_ignored_partition(
             "/data/adb/hybrid-mount/run/staging_x"
         ));

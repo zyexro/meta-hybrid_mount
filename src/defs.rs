@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::Path;
+
 #[cfg(any(target_os = "linux", target_os = "android"))]
 #[allow(dead_code)]
 pub const HYBRID_MOUNT_DIR: &str = "/data/adb/hybrid-mount";
@@ -50,6 +52,83 @@ pub const IGNORE_UMOUNT_PARTITIONS: &[&str] = &[
     "/system/lib64",
 ];
 
+pub fn should_skip_ksu_umount(path: &str) -> bool {
+    has_ignored_umount_prefix(path) || is_package_manager_scan_path(path)
+}
+
+pub fn should_skip_overlay_ksu_umount(path: &str, lowerdirs: &[impl AsRef<Path>]) -> bool {
+    should_skip_ksu_umount(path) || overlay_contains_package_manager_etc(path, lowerdirs)
+}
+
+fn has_ignored_umount_prefix(path: &str) -> bool {
+    IGNORE_UMOUNT_PARTITIONS.iter().any(|ignored| {
+        let ignored = ignored.trim_end_matches('/');
+        path == ignored
+            || path
+                .strip_prefix(ignored)
+                .is_some_and(|rest| rest.starts_with('/'))
+    })
+}
+
+fn is_package_manager_scan_path(path: &str) -> bool {
+    let path = path.trim_end_matches('/');
+    let mut parts = path.trim_start_matches('/').split('/');
+    let Some(partition) = parts.next() else {
+        return false;
+    };
+
+    if partition != "system" && !MANAGED_PARTITIONS.contains(&partition) {
+        return false;
+    }
+
+    match (parts.next(), parts.next()) {
+        // System package APK directories must remain visible after PackageManager
+        // records their code paths; otherwise app processes can fail to load
+        // classes from /system*/app or /system*/priv-app.
+        (Some("app" | "priv-app"), _) => true,
+        // Runtime resource overlays are scanned from partition overlay dirs and
+        // can be opened again by OverlayManager/idmap2d or resource loading.
+        (Some("overlay"), _) => true,
+        // Priv-app allowlists and sysconfig entries are read alongside those
+        // package directories during boot. Keep them in the same namespace view.
+        (
+            Some("etc"),
+            Some("permissions" | "sysconfig" | "default-permissions" | "preferred-apps"),
+        ) => true,
+        _ => false,
+    }
+}
+
+fn overlay_contains_package_manager_etc(path: &str, lowerdirs: &[impl AsRef<Path>]) -> bool {
+    if !is_partition_etc_root(path) {
+        return false;
+    }
+
+    lowerdirs.iter().any(|lowerdir| {
+        PACKAGE_MANAGER_ETC_DIRS
+            .iter()
+            .any(|child| lowerdir.as_ref().join(child).exists())
+    })
+}
+
+fn is_partition_etc_root(path: &str) -> bool {
+    let path = path.trim_end_matches('/');
+    let mut parts = path.trim_start_matches('/').split('/');
+    let Some(partition) = parts.next() else {
+        return false;
+    };
+
+    (partition == "system" || MANAGED_PARTITIONS.contains(&partition))
+        && matches!((parts.next(), parts.next()), (Some("etc"), None))
+}
+
+const PACKAGE_MANAGER_ETC_DIRS: &[&str] = &[
+    "permissions",
+    "sysconfig",
+    "default-permissions",
+    "preferred-apps",
+];
+
 pub const MANAGED_PARTITIONS: &[&str] = &[
     "odm",
     "product",
@@ -74,3 +153,55 @@ pub const MANAGED_PARTITIONS: &[&str] = &[
 ];
 
 pub const MAX_MERGE_JSON_DEPTH: usize = 64;
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::TempDir;
+
+    use super::*;
+
+    #[test]
+    fn overlay_etc_root_skips_ksu_umount_when_pm_config_is_present() {
+        let temp = TempDir::new().unwrap();
+        let lowerdir = temp.path().join("Slide/system/etc");
+        fs::create_dir_all(lowerdir.join("permissions")).unwrap();
+
+        assert!(should_skip_overlay_ksu_umount(
+            "/system/etc",
+            &[lowerdir.as_path()]
+        ));
+    }
+
+    #[test]
+    fn overlay_etc_root_does_not_skip_ksu_umount_for_unrelated_children() {
+        let temp = TempDir::new().unwrap();
+        let lowerdir = temp.path().join("module/system/etc");
+        fs::create_dir_all(lowerdir.join("init")).unwrap();
+
+        assert!(!should_skip_overlay_ksu_umount(
+            "/system/etc",
+            &[lowerdir.as_path()]
+        ));
+    }
+
+    #[test]
+    fn overlay_non_etc_scan_path_skips_ksu_umount_without_content_probe() {
+        let temp = TempDir::new().unwrap();
+        let lowerdir = temp.path().join("Slide/system/priv-app");
+
+        assert!(should_skip_overlay_ksu_umount(
+            "/system/priv-app",
+            &[lowerdir.as_path()]
+        ));
+        assert!(should_skip_overlay_ksu_umount(
+            "/product/overlay",
+            &[lowerdir.as_path()]
+        ));
+        assert!(should_skip_overlay_ksu_umount(
+            "/my_company/overlay/CustomOplusFwkResOverlay.apk",
+            &[lowerdir.as_path()]
+        ));
+    }
+}
