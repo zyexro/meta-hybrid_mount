@@ -2976,6 +2976,7 @@ dependencies = [
  "notify",
  "semver",
  "serde",
+ "tempfile",
  "toml",
  "zip",
 ]

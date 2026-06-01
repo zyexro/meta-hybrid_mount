@@ -54,10 +54,6 @@ impl UmountQueue {
         true
     }
 
-    fn is_empty(&self) -> bool {
-        self.pending.is_empty()
-    }
-
     fn commit(&mut self) -> Result<()> {
         if self.pending.is_empty() {
             return Ok(());
@@ -188,7 +184,6 @@ mod tests {
         assert!(queue.add("/system/bin"));
         assert!(!queue.add("/system/bin"));
         assert!(queue.add("/system/xbin"));
-        assert!(!queue.is_empty());
 
         queue = UmountQueue::new();
         assert!(queue.add("/system/bin"));

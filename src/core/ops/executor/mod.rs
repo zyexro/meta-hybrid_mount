@@ -336,16 +336,6 @@ fn collect_involved_modules(op: &OverlayOperation) -> Vec<String> {
 /// with the correct lowerdir paths.
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn detach_stale_overlay_if_present(target: &str, config: &config::Config) {
-    if crate::defs::should_keep_existing_mount_before_overlay(target) {
-        crate::scoped_log!(
-            debug,
-            "executor",
-            "stale overlay probe skipped: target={}, reason=package_manager_scan_path",
-            target
-        );
-        return;
-    }
-
     if !is_hybrid_overlay_mount(target, config) {
         return;
     }
@@ -412,6 +402,57 @@ fn overlay_options_have_hybrid_marker(
         .filter_map(|key| options.get(key).and_then(Option::as_deref))
         .any(|value| {
             value.contains(crate::defs::HYBRID_MOUNT_DIR)
-                || value.split(':').any(|path| path.starts_with("/mnt/"))
+                || value.split(':').any(path_uses_hybrid_runtime_mount)
         })
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn path_uses_hybrid_runtime_mount(path: &str) -> bool {
+    let Some(rest) = path.strip_prefix("/mnt/") else {
+        return false;
+    };
+    let Some((name, _)) = rest.split_once('/') else {
+        return false;
+    };
+
+    is_random_runtime_mount_name(name) || is_pid_runtime_mount_name(name)
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn is_random_runtime_mount_name(name: &str) -> bool {
+    name.len() == 10 && name.chars().all(|ch| ch.is_ascii_alphanumeric())
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn is_pid_runtime_mount_name(name: &str) -> bool {
+    name.strip_prefix("mnt_")
+        .is_some_and(|pid| !pid.is_empty() && pid.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    use super::path_uses_hybrid_runtime_mount;
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn hybrid_runtime_mount_marker_matches_generated_mount_paths() {
+        assert!(path_uses_hybrid_runtime_mount(
+            "/mnt/7kYaSSqdFP/com.android.packageinstaller/system/priv-app"
+        ));
+        assert!(path_uses_hybrid_runtime_mount(
+            "/mnt/mnt_12345/com.example/system"
+        ));
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[test]
+    fn hybrid_runtime_mount_marker_ignores_vendor_mount_paths() {
+        assert!(!path_uses_hybrid_runtime_mount(
+            "/mnt/vendor/mi_ext/system/priv-app"
+        ));
+        assert!(!path_uses_hybrid_runtime_mount(
+            "/mnt/product/pangu/system/app"
+        ));
+    }
 }
