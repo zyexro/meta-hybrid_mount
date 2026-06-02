@@ -96,18 +96,20 @@ where
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn normalize_umount_path(path: &str) -> String {
     let mut normalized = String::new();
+    let absolute = Path::new(path).is_absolute();
+
     for component in Path::new(path).components() {
         match component {
             std::path::Component::RootDir => normalized.push('/'),
             std::path::Component::Normal(part) => {
-                if !normalized.ends_with('/') {
+                if !normalized.is_empty() && !normalized.ends_with('/') {
                     normalized.push('/');
                 }
                 normalized.push_str(&part.to_string_lossy());
             }
             std::path::Component::CurDir => {}
             _ => {
-                if !normalized.ends_with('/') {
+                if !normalized.is_empty() && !normalized.ends_with('/') {
                     normalized.push('/');
                 }
                 normalized.push_str(component.as_os_str().to_string_lossy().as_ref());
@@ -115,7 +117,19 @@ fn normalize_umount_path(path: &str) -> String {
         }
     }
 
-    let normalized = normalized.trim_end_matches('/');
+    if normalized.is_empty() {
+        return if absolute {
+            "/".to_string()
+        } else {
+            ".".to_string()
+        };
+    }
+
+    let normalized = if absolute {
+        normalized.trim_end_matches('/')
+    } else {
+        normalized.trim_end_matches('/')
+    };
     if normalized.is_empty() {
         "/".to_string()
     } else {
@@ -154,6 +168,9 @@ mod tests {
         assert_eq!(normalize_umount_path("/system/./bin"), "/system/bin");
         assert_eq!(normalize_umount_path("/"), "/");
         assert_eq!(normalize_umount_path("///"), "/");
+        assert_eq!(normalize_umount_path("system//bin/"), "system/bin");
+        assert_eq!(normalize_umount_path("./system/bin"), "system/bin");
+        assert_eq!(normalize_umount_path("."), ".");
     }
 
     #[test]
