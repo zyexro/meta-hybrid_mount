@@ -140,7 +140,11 @@ fn mount_overlay_core(
         dest,
     ) {
         crate::scoped_log!(warn, "overlayfs", "fsopen failed, fallback=mount: {:#}", e);
-        let safe_lower = escape_mount_option_value(&lowerdir_config);
+        let safe_lower = lower_dirs
+            .iter()
+            .map(|path| escape_mount_option_value(path))
+            .collect::<Vec<_>>()
+            .join(":");
         let mut data = format!("lowerdir={safe_lower}");
 
         if let (Some(upperdir), Some(workdir)) = (upperdir_s, workdir_s) {
@@ -407,5 +411,17 @@ mod tests {
     #[test]
     fn escape_mount_option_value_escapes_overlay_separators() {
         assert_eq!(escape_mount_option_value("/a,b:/c\\d"), "/a\\,b\\:/c\\\\d");
+    }
+
+    #[test]
+    fn fallback_lowerdir_preserves_layer_separators() {
+        let lower_dirs = ["/a,b".to_string(), "/c:d".to_string(), "/e\\f".to_string()];
+        let lowerdir = lower_dirs
+            .iter()
+            .map(|path| escape_mount_option_value(path))
+            .collect::<Vec<_>>()
+            .join(":");
+
+        assert_eq!(lowerdir, "/a\\,b:/c\\:d:/e\\\\f");
     }
 }

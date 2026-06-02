@@ -19,11 +19,15 @@ use std::{
 };
 
 use anyhow::Result;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use rustix::mount::{UnmountFlags, unmount as umount};
 
 #[cfg(feature = "kasumi")]
 use crate::core::kasumi_coordinator::KasumiCoordinator;
 #[cfg(feature = "kasumi")]
 use crate::core::recovery::ModuleStageFailure;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use crate::sys::mount::is_mounted;
 use crate::{
     conf::config::Config,
     core::{
@@ -329,10 +333,50 @@ fn clean_up_path(
         "cleanup: remove={}",
         tempdir.display()
     );
+    detach_tempdir_mount(tempdir)?;
     remove_path(tempdir)?;
 
     crate::core::storage::cleanup_artifacts(storage_mode)?;
     Ok(())
+}
+
+fn detach_tempdir_mount(tempdir: &Path) -> Result<()> {
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        let _ = tempdir;
+        Ok(())
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        if !is_mounted(tempdir) {
+            return Ok(());
+        }
+
+        crate::scoped_log!(
+            info,
+            "controller:finalize",
+            "cleanup umount: path={}",
+            tempdir.display()
+        );
+        if let Err(err) = umount(tempdir, UnmountFlags::DETACH) {
+            crate::scoped_log!(
+                warn,
+                "controller:finalize",
+                "cleanup umount failed: path={}, error={:#}",
+                tempdir.display(),
+                err
+            );
+            return Err(err.into());
+        }
+        crate::scoped_log!(
+            info,
+            "controller:finalize",
+            "cleanup umount complete: path={}",
+            tempdir.display()
+        );
+        Ok(())
+    }
 }
 
 fn remove_path(path: &Path) -> Result<()> {

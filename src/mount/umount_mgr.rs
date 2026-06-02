@@ -66,9 +66,9 @@ where
         }
 
         let target = target.as_ref();
-        let path = normalize_umount_path(target.as_str()?);
+        let path = target.as_str()?;
 
-        if is_ignored_partition(&path) {
+        if is_ignored_partition(path) {
             crate::scoped_log!(
                 debug,
                 "umount",
@@ -82,58 +82,14 @@ where
             .lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock history mutex"))?;
 
-        if !history.insert(path.clone()) {
+        if !history.insert(path.to_string()) {
             return Ok(());
         }
 
         LIST.lock()
             .map_err(|_| anyhow::anyhow!("Failed to lock umount list"))?
-            .add(Path::new(&path));
+            .add(target);
         Ok(())
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn normalize_umount_path(path: &str) -> String {
-    let mut normalized = String::new();
-    let absolute = Path::new(path).is_absolute();
-
-    for component in Path::new(path).components() {
-        match component {
-            std::path::Component::RootDir => normalized.push('/'),
-            std::path::Component::Normal(part) => {
-                if !normalized.is_empty() && !normalized.ends_with('/') {
-                    normalized.push('/');
-                }
-                normalized.push_str(&part.to_string_lossy());
-            }
-            std::path::Component::CurDir => {}
-            _ => {
-                if !normalized.is_empty() && !normalized.ends_with('/') {
-                    normalized.push('/');
-                }
-                normalized.push_str(component.as_os_str().to_string_lossy().as_ref());
-            }
-        }
-    }
-
-    if normalized.is_empty() {
-        return if absolute {
-            "/".to_string()
-        } else {
-            ".".to_string()
-        };
-    }
-
-    let normalized = if absolute {
-        normalized.trim_end_matches('/')
-    } else {
-        normalized.trim_end_matches('/')
-    };
-    if normalized.is_empty() {
-        "/".to_string()
-    } else {
-        normalized.to_string()
     }
 }
 
@@ -158,20 +114,7 @@ pub fn commit() -> Result<()> {
 #[cfg(test)]
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod tests {
-    use super::{is_ignored_partition, normalize_umount_path};
-
-    #[test]
-    fn normalizes_equivalent_umount_paths() {
-        assert_eq!(normalize_umount_path("/system/bin/"), "/system/bin");
-        assert_eq!(normalize_umount_path("/system/bin///"), "/system/bin");
-        assert_eq!(normalize_umount_path("/system//bin"), "/system/bin");
-        assert_eq!(normalize_umount_path("/system/./bin"), "/system/bin");
-        assert_eq!(normalize_umount_path("/"), "/");
-        assert_eq!(normalize_umount_path("///"), "/");
-        assert_eq!(normalize_umount_path("system//bin/"), "system/bin");
-        assert_eq!(normalize_umount_path("./system/bin"), "system/bin");
-        assert_eq!(normalize_umount_path("."), ".");
-    }
+    use super::is_ignored_partition;
 
     #[test]
     fn skips_exact_ignored_partition() {
