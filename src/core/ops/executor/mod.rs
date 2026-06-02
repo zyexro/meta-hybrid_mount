@@ -18,10 +18,6 @@ mod overlay;
 use std::{collections::BTreeSet, path::Path};
 
 use anyhow::{Result, bail};
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use procfs::process::Process;
-#[cfg(any(target_os = "linux", target_os = "android"))]
-use rustix::mount::{UnmountFlags, unmount as umount};
 
 #[cfg(feature = "kasumi")]
 use crate::core::kasumi_coordinator::KasumiCoordinator;
@@ -130,12 +126,6 @@ impl Executor {
                     op.target,
                     op.lowerdirs.len()
                 );
-
-                // If the target is already an overlay mount (e.g. left over
-                // from a previous failed recovery attempt), detach it first so
-                // the new overlay references the current ext4 image path.
-                #[cfg(any(target_os = "linux", target_os = "android"))]
-                detach_stale_overlay_if_present(&op.target, config);
 
                 #[cfg(feature = "kasumi")]
                 let overlay_result = overlay::mount_overlay(op, config, &kasumi);
@@ -329,145 +319,4 @@ fn collect_involved_modules(op: &OverlayOperation) -> Vec<String> {
     involved_modules.sort();
     involved_modules.dedup();
     involved_modules
-}
-
-/// If `target` is already an overlay mount (e.g. leftover from a previous
-/// failed recovery retry), detach it so the fresh overlay can be mounted
-/// with the correct lowerdir paths.
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn detach_stale_overlay_if_present(target: &str, config: &config::Config) {
-    if !is_hybrid_overlay_mount(target, config) {
-        return;
-    }
-
-    crate::scoped_log!(
-        warn,
-        "executor",
-        "detaching stale overlay before remount: target={}",
-        target
-    );
-    if let Err(e) = umount(target, UnmountFlags::DETACH) {
-        crate::scoped_log!(
-            warn,
-            "executor",
-            "detach stale overlay failed: target={}, error={:#}",
-            target,
-            e
-        );
-    }
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn is_hybrid_overlay_mount(target: &str, config: &config::Config) -> bool {
-    let Ok(process) = Process::myself() else {
-        crate::scoped_log!(
-            debug,
-            "executor",
-            "stale overlay probe skipped: target={}, reason=process_unavailable",
-            target
-        );
-        return false;
-    };
-    let Ok(mountinfo) = process.mountinfo() else {
-        crate::scoped_log!(
-            debug,
-            "executor",
-            "stale overlay probe skipped: target={}, reason=mountinfo_unavailable",
-            target
-        );
-        return false;
-    };
-
-    mountinfo.into_iter().any(|mount| {
-        mount.mount_point.to_string_lossy() == target
-            && mount.fs_type == "overlay"
-            && overlay_source_matches(&mount.mount_source, &config.mountsource)
-            && overlay_options_have_hybrid_marker(&mount.super_options)
-    })
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn overlay_source_matches(source: &Option<String>, configured_source: &str) -> bool {
-    source
-        .as_deref()
-        .is_some_and(|source| source == configured_source || source == "overlay")
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn overlay_options_have_hybrid_marker(
-    options: &std::collections::HashMap<String, Option<String>>,
-) -> bool {
-    ["lowerdir", "upperdir", "workdir"]
-        .into_iter()
-        .filter_map(|key| options.get(key).and_then(Option::as_deref))
-        .any(|value| {
-            value.contains(crate::defs::HYBRID_MOUNT_DIR)
-                || value.split(':').any(path_uses_hybrid_runtime_mount)
-        })
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn path_uses_hybrid_runtime_mount(path: &str) -> bool {
-    let Some(rest) = path.strip_prefix("/mnt/") else {
-        return false;
-    };
-    let Some((name, _)) = rest.split_once('/') else {
-        return false;
-    };
-
-    is_prefixed_runtime_mount_name(name)
-        || is_legacy_random_runtime_mount_name(name)
-        || is_legacy_pid_runtime_mount_name(name)
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn is_prefixed_runtime_mount_name(name: &str) -> bool {
-    name.strip_prefix("hm_").is_some_and(|suffix| {
-        is_legacy_random_runtime_mount_name(suffix) || is_legacy_pid_runtime_mount_name(suffix)
-    })
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn is_legacy_random_runtime_mount_name(name: &str) -> bool {
-    name.len() == 10 && name.chars().all(|ch| ch.is_ascii_alphanumeric())
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-fn is_legacy_pid_runtime_mount_name(name: &str) -> bool {
-    name.strip_prefix("mnt_")
-        .is_some_and(|pid| !pid.is_empty() && pid.chars().all(|ch| ch.is_ascii_digit()))
-}
-
-#[cfg(test)]
-mod tests {
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    use super::path_uses_hybrid_runtime_mount;
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    #[test]
-    fn hybrid_runtime_mount_marker_matches_generated_mount_paths() {
-        assert!(path_uses_hybrid_runtime_mount(
-            "/mnt/hm_7kYaSSqdFP/com.android.packageinstaller/system/priv-app"
-        ));
-        assert!(path_uses_hybrid_runtime_mount(
-            "/mnt/hm_mnt_12345/com.example/system"
-        ));
-        assert!(path_uses_hybrid_runtime_mount(
-            "/mnt/7kYaSSqdFP/com.android.packageinstaller/system/priv-app"
-        ));
-        assert!(path_uses_hybrid_runtime_mount(
-            "/mnt/mnt_12345/com.example/system"
-        ));
-    }
-
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    #[test]
-    fn hybrid_runtime_mount_marker_ignores_vendor_mount_paths() {
-        assert!(!path_uses_hybrid_runtime_mount(
-            "/mnt/vendor/mi_ext/system/priv-app"
-        ));
-        assert!(!path_uses_hybrid_runtime_mount(
-            "/mnt/product/pangu/system/app"
-        ));
-    }
 }

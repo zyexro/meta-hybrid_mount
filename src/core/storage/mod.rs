@@ -21,14 +21,13 @@ use std::{
 
 use anyhow::Result;
 #[cfg(any(target_os = "linux", target_os = "android"))]
-use rustix::mount::{MountPropagationFlags, mount_change};
-#[cfg(all(
-    feature = "control-plane",
-    any(target_os = "linux", target_os = "android")
-))]
-use rustix::mount::{UnmountFlags, unmount as umount};
+use rustix::mount::{MountPropagationFlags, UnmountFlags, mount_change, unmount as umount};
 
 use crate::defs;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use crate::mount::umount_mgr::send_umountable;
+#[cfg(any(target_os = "linux", target_os = "android"))]
+use crate::sys::mount::is_mounted;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageMode {
@@ -98,6 +97,7 @@ pub fn setup_with_sources(
     img_path: &Path,
 ) -> Result<StorageHandle> {
     reset_image_files(img_path)?;
+    detach_existing_mount(mnt_base);
 
     #[cfg(feature = "control-plane")]
     if !force_ext4 && try_setup_tmpfs(mnt_base, mount_source)? {
@@ -159,6 +159,26 @@ fn remove_image_file(path: &Path) -> Result<()> {
     }
 }
 
+fn detach_existing_mount(mnt_base: &Path) {
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        let _ = mnt_base;
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if is_mounted(mnt_base)
+        && let Err(e) = umount(mnt_base, UnmountFlags::DETACH)
+    {
+        crate::scoped_log!(
+            warn,
+            "storage",
+            "failed to detach existing mount at {}: {:#}",
+            mnt_base.display(),
+            e
+        );
+    }
+}
+
 fn finalize_mount_setup(path: &Path, disable_umount: bool) {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     if let Err(e) = mount_change(path, MountPropagationFlags::PRIVATE) {
@@ -172,12 +192,13 @@ fn finalize_mount_setup(path: &Path, disable_umount: bool) {
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
-    if !disable_umount {
+    if !disable_umount && let Err(e) = send_umountable(path) {
         crate::scoped_log!(
-            debug,
+            warn,
             "storage",
-            "skip register umountable: path={}, reason=live_overlay_lowerdir",
-            path.display()
+            "failed to register umountable at {}: {:#}",
+            path.display(),
+            e
         );
     }
 

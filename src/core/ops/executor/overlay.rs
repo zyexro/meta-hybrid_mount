@@ -94,9 +94,10 @@ fn mount_overlay_base(op: &OverlayOperation, config: &config::Config) -> Result<
 
     let mut mount_source = config.mountsource.clone();
 
-    let skip_ksu_umount = defs::should_skip_overlay_ksu_umount(op.target.trim(), &op.lowerdirs);
-
-    if skip_ksu_umount {
+    if defs::IGNORE_UNMOUNT_PARTITIONS
+        .iter()
+        .any(|s| s.trim() == op.target.trim())
+    {
         mount_source = "overlay".to_string();
     }
 
@@ -106,7 +107,6 @@ fn mount_overlay_base(op: &OverlayOperation, config: &config::Config) -> Result<
         work_opt,
         upper_opt,
         &mount_source,
-        !config.disable_umount && !skip_ksu_umount,
     )?;
 
     crate::scoped_log!(
@@ -119,7 +119,6 @@ fn mount_overlay_base(op: &OverlayOperation, config: &config::Config) -> Result<
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
     if !config.disable_umount
-        && !skip_ksu_umount
         && let Err(e) = umount_mgr::send_umountable(&op.target)
     {
         crate::scoped_log!(

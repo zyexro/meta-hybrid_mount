@@ -29,50 +29,24 @@ use rustix::path::Arg;
 use crate::defs;
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub static QUEUE: LazyLock<Mutex<UmountQueue>> = LazyLock::new(|| Mutex::new(UmountQueue::new()));
-
+pub static LIST: LazyLock<Mutex<TryUmount>> = LazyLock::new(|| Mutex::new(TryUmount::new()));
 #[cfg(any(target_os = "linux", target_os = "android"))]
-pub struct UmountQueue {
-    list: TryUmount,
-    pending: HashSet<String>,
-}
-
-#[cfg(any(target_os = "linux", target_os = "android"))]
-impl UmountQueue {
-    fn new() -> Self {
-        Self {
-            list: TryUmount::new(),
-            pending: HashSet::new(),
-        }
-    }
-
-    fn add(&mut self, path: &str) -> bool {
-        if !self.pending.insert(path.to_string()) {
-            return false;
-        }
-        self.list.add(Path::new(path));
-        true
-    }
-
-    fn commit(&mut self) -> Result<()> {
-        if self.pending.is_empty() {
-            return Ok(());
-        }
-
-        self.list
-            .format_msg(|p| format!("{p:?} umount successful "));
-        self.list.flags(TryUmountFlags::MNT_DETACH);
-        self.list.umount()?;
-        *self = Self::new();
-        Ok(())
-    }
-}
+static HISTORY: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
 fn is_ignored_partition(path: &str) -> bool {
-    // Keep paths that app processes or PackageManager later dereference visible
-    // in their namespaces. KSU detach is still used for less fragile paths.
-    defs::should_skip_ksu_umount(path)
+    // pairip-protected APKs (Play Integrity, etc.) verify native library backing
+    // after zygote forks; if KSU detaches our overlay over /system/lib*,
+    // /vendor/lib* in the app's namespace mid-flight, those checks crash with
+    // SIGSEGV in libpairipcore.so. Keep the overlay visible in the app namespace
+    // for these paths and rely on Kasumi/sus_mount to handle hiding instead.
+    defs::IGNORE_UNMOUNT_PARTITIONS.iter().any(|ignored| {
+        let ignored = ignored.trim_end_matches('/');
+        path == ignored
+            || path
+                .strip_prefix(ignored)
+                .is_some_and(|rest| rest.starts_with('/'))
+    })
 }
 
 pub fn send_umountable<P>(target: P) -> Result<()>
@@ -104,14 +78,17 @@ where
             return Ok(());
         }
 
-        let mut queue = QUEUE
+        let mut history = HISTORY
             .lock()
-            .map_err(|_| anyhow::anyhow!("Failed to lock umount queue"))?;
+            .map_err(|_| anyhow::anyhow!("Failed to lock history mutex"))?;
 
-        if !queue.add(&path) {
+        if !history.insert(path.clone()) {
             return Ok(());
         }
 
+        LIST.lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock umount list"))?
+            .add(Path::new(&path));
         Ok(())
     }
 }
@@ -151,11 +128,13 @@ pub fn commit() -> Result<()> {
     if !crate::utils::KSU.load(std::sync::atomic::Ordering::Relaxed) {
         return Ok(());
     }
-    let mut queue = QUEUE
+    let mut list = LIST
         .lock()
-        .map_err(|_| anyhow::anyhow!("Failed to lock umount queue"))?;
+        .map_err(|_| anyhow::anyhow!("Failed to lock umount list"))?;
 
-    if let Err(e2) = queue.commit() {
+    list.format_msg(|p| format!("{p:?} umount successful "));
+    list.flags(TryUmountFlags::MNT_DETACH);
+    if let Err(e2) = list.umount() {
         crate::scoped_log!(warn, "umount", "commit failed: {:#}", e2);
     }
 
@@ -165,7 +144,7 @@ pub fn commit() -> Result<()> {
 #[cfg(test)]
 #[cfg(any(target_os = "linux", target_os = "android"))]
 mod tests {
-    use super::{UmountQueue, is_ignored_partition, normalize_umount_path};
+    use super::{is_ignored_partition, normalize_umount_path};
 
     #[test]
     fn normalizes_equivalent_umount_paths() {
@@ -175,18 +154,6 @@ mod tests {
         assert_eq!(normalize_umount_path("/system/./bin"), "/system/bin");
         assert_eq!(normalize_umount_path("/"), "/");
         assert_eq!(normalize_umount_path("///"), "/");
-    }
-
-    #[test]
-    fn queue_dedupes_only_pending_paths() {
-        let mut queue = UmountQueue::new();
-
-        assert!(queue.add("/system/bin"));
-        assert!(!queue.add("/system/bin"));
-        assert!(queue.add("/system/xbin"));
-
-        queue = UmountQueue::new();
-        assert!(queue.add("/system/bin"));
     }
 
     #[test]
@@ -204,23 +171,6 @@ mod tests {
     }
 
     #[test]
-    fn skips_package_manager_scan_paths() {
-        assert!(is_ignored_partition("/system/app"));
-        assert!(is_ignored_partition("/system/priv-app"));
-        assert!(is_ignored_partition("/product/app"));
-        assert!(is_ignored_partition("/product/priv-app/Example"));
-        assert!(is_ignored_partition("/product/overlay"));
-        assert!(is_ignored_partition(
-            "/my_company/overlay/CustomOplusFwkResOverlay.apk"
-        ));
-        assert!(is_ignored_partition("/system_ext/app"));
-        assert!(is_ignored_partition("/system_ext/etc/permissions"));
-        assert!(is_ignored_partition("/system/etc/sysconfig"));
-        assert!(is_ignored_partition("/system/etc/default-permissions"));
-        assert!(is_ignored_partition("/system/etc/preferred-apps"));
-    }
-
-    #[test]
     fn does_not_skip_siblings_with_shared_prefix() {
         // /system/lib should not match /system/lib_extra
         assert!(!is_ignored_partition("/system/lib_extra"));
@@ -232,7 +182,6 @@ mod tests {
     fn does_not_skip_unrelated_paths() {
         assert!(!is_ignored_partition("/product"));
         assert!(!is_ignored_partition("/system/etc"));
-        assert!(!is_ignored_partition("/system/etc/init"));
         assert!(!is_ignored_partition(
             "/data/adb/hybrid-mount/run/staging_x"
         ));
