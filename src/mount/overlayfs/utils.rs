@@ -91,20 +91,46 @@ where
         device_path.display()
     );
 
-    mount(
+    // Try to mount; if it fails, detach the loop device to avoid resource leak.
+    // The autoclear flag only works if mount succeeds at least once.
+    match mount(
         &device_path,
         target.as_ref(),
         "ext4",
         MountFlags::NOATIME,
         Some(c""),
-    )
-    .context(format!(
-        "Failed to mount {} to {}",
-        device_path.display(),
-        target.as_ref().display()
-    ))?;
+    ) {
+        Ok(()) => {
+            // Mount succeeded; autoclear will handle cleanup on umount
+            Ok(())
+        }
+        Err(e) => {
+            // Mount failed; autoclear won't trigger, so manually detach
+            crate::scoped_log!(
+                warn,
+                "overlayfs:utils",
+                "mount failed, detaching loop device: device={}, error={:#}",
+                device_path.display(),
+                e
+            );
 
-    Ok(())
+            if let Err(detach_err) = ld.detach() {
+                crate::scoped_log!(
+                    error,
+                    "overlayfs:utils",
+                    "failed to detach loop device: device={}, error={:#}",
+                    device_path.display(),
+                    detach_err
+                );
+            }
+
+            Err(e).context(format!(
+                "Failed to mount {} to {}",
+                device_path.display(),
+                target.as_ref().display()
+            ))
+        }
+    }
 }
 
 #[cfg(any(target_os = "linux", target_os = "android"))]
