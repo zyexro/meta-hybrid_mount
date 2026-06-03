@@ -48,10 +48,10 @@ pub fn update_description(
 
 fn running_description(
     storage_mode: StorageMode,
-    kasumi_enabled: bool,
+    _kasumi_enabled: bool,
     overlay_count: usize,
     magic_count: usize,
-    kasumi_count: usize,
+    _kasumi_count: usize,
     blacklisted_count: usize,
 ) -> String {
     let (mode_str, status_emoji) = match storage_mode {
@@ -61,8 +61,9 @@ fn running_description(
     };
 
     let mut stats = Vec::new();
-    if kasumi_enabled {
-        stats.push(format!("Kasumi:{}", kasumi_count));
+    #[cfg(feature = "kasumi")]
+    if _kasumi_enabled {
+        stats.push(format!("Kasumi:{}", _kasumi_count));
     }
     stats.push(format!("Overlay:{}", overlay_count));
     stats.push(format!("Magic:{}", magic_count));
@@ -123,6 +124,7 @@ mod tests {
     use crate::core::storage::StorageMode;
 
     #[test]
+    #[cfg(feature = "kasumi")]
     fn running_description_keeps_kasumi_zero_count_when_enabled() {
         #[cfg(feature = "control-plane")]
         let desc = running_description(StorageMode::Tmpfs, true, 2, 3, 0, 0);
@@ -130,6 +132,16 @@ mod tests {
         let desc = running_description(StorageMode::Ext4, true, 2, 3, 0, 0);
 
         assert!(desc.contains("Kasumi:0"));
+        assert!(desc.contains("Overlay:2"));
+        assert!(desc.contains("Magic:3"));
+    }
+
+    #[test]
+    #[cfg(not(feature = "kasumi"))]
+    fn running_description_hides_kasumi_in_lite_builds() {
+        let desc = running_description(StorageMode::Ext4, true, 2, 3, 0, 0);
+
+        assert!(!desc.contains("Kasumi:"));
         assert!(desc.contains("Overlay:2"));
         assert!(desc.contains("Magic:3"));
     }
