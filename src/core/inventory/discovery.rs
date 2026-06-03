@@ -139,7 +139,7 @@ pub fn scan(source_dir: &Path, cfg: &config::Config) -> Result<Vec<Module>> {
     Ok(modules)
 }
 
-fn module_prop_id_matches_dir(prop: &Path, dir_id: &str) -> Result<bool> {
+pub fn module_prop_id_matches_dir(prop: &Path, dir_id: &str) -> Result<bool> {
     Ok(read_module_prop_id(prop)?
         .as_deref()
         .is_some_and(|prop_id| validate_module_id(prop_id).is_ok() && prop_id == dir_id))
@@ -187,6 +187,10 @@ mod tests {
         fs::write(module_dir.join("module.prop"), format!("id={id}\n")).unwrap();
     }
 
+    fn write_prop_content(module_dir: &Path, content: &str) {
+        fs::write(module_dir.join("module.prop"), content).unwrap();
+    }
+
     #[test]
     fn scan_skips_missing_module_prop() {
         let temp = TempDir::new().unwrap();
@@ -226,7 +230,19 @@ mod tests {
         let temp = TempDir::new().unwrap();
         let module_dir = temp.path().join("alpha");
         fs::create_dir(&module_dir).unwrap();
-        fs::write(module_dir.join("module.prop"), "name=Alpha\n").unwrap();
+        write_prop_content(&module_dir, "name=Alpha\n");
+
+        let modules = scan(temp.path(), &config::Config::default()).unwrap();
+
+        assert!(modules.is_empty());
+    }
+
+    #[test]
+    fn scan_rejects_invalid_module_prop_id() {
+        let temp = TempDir::new().unwrap();
+        let module_dir = temp.path().join("alpha");
+        fs::create_dir(&module_dir).unwrap();
+        write_prop_content(&module_dir, "id=1alpha\n");
 
         let modules = scan(temp.path(), &config::Config::default()).unwrap();
 
@@ -239,6 +255,19 @@ mod tests {
         let module_dir = temp.path().join("alpha");
         fs::create_dir(&module_dir).unwrap();
         write_prop(&module_dir, "alpha");
+
+        let modules = scan(temp.path(), &config::Config::default()).unwrap();
+
+        assert_eq!(modules.len(), 1);
+        assert_eq!(modules[0].id, "alpha");
+    }
+
+    #[test]
+    fn scan_trims_module_prop_id_and_ignores_comments() {
+        let temp = TempDir::new().unwrap();
+        let module_dir = temp.path().join("alpha");
+        fs::create_dir(&module_dir).unwrap();
+        write_prop_content(&module_dir, "# id=wrong\n  id = alpha  \n");
 
         let modules = scan(temp.path(), &config::Config::default()).unwrap();
 

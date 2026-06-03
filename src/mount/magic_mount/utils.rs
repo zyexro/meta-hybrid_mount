@@ -15,7 +15,6 @@
 use std::{
     collections::{HashMap, HashSet, btree_map::Entry},
     fs::{self, DirEntry, Metadata, create_dir, create_dir_all, read_link},
-    io::{BufRead, BufReader},
     os::unix::fs::{MetadataExt, symlink},
     path::{Path, PathBuf},
 };
@@ -30,7 +29,6 @@ use crate::{
     domain::{ModuleRules, MountMode},
     mount::node::Node,
     sys::fs::{lgetfilecon, lsetfilecon},
-    utils::validate_module_id,
 };
 
 #[cfg(not(any(target_os = "linux", target_os = "android")))]
@@ -307,11 +305,11 @@ pub fn collect_module_files(
             );
             continue;
         }
-        if !is_valid_module_prop_id(&prop)? {
+        if !inventory::module_prop_id_matches_dir(&prop, &id)? {
             crate::scoped_log!(
                 debug,
                 "magic:collect",
-                "module skip: id={}, reason=invalid_module_id",
+                "module skip: id={}, reason=module_prop_id_mismatch",
                 id
             );
             continue;
@@ -415,31 +413,6 @@ pub fn collect_module_files(
     } else {
         Ok(None)
     }
-}
-
-fn is_valid_module_prop_id(prop: &Path) -> Result<bool> {
-    let file = fs::File::open(prop)?;
-    for line_result in BufReader::new(file).lines() {
-        let line = match line_result {
-            Ok(line) => line,
-            Err(e) => {
-                crate::scoped_log!(
-                    warn,
-                    "magic:collect",
-                    "read module.prop failed: path={}, error={}",
-                    prop.display(),
-                    e
-                );
-                return Ok(false);
-            }
-        };
-        if line.starts_with("id")
-            && let Some((_, value)) = line.split_once('=')
-        {
-            return Ok(validate_module_id(value).is_ok());
-        }
-    }
-    Ok(true)
 }
 
 pub fn clone_symlink<S>(src: S, dst: S) -> Result<()>
