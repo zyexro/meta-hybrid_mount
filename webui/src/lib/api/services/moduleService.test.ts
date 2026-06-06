@@ -2,25 +2,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../core/bridge", () => ({
   runDaemonCommand: vi.fn(),
-  readModuleProp: vi.fn(),
 }));
 
-import { readModuleProp, runDaemonCommand } from "../core/bridge";
+import { runDaemonCommand } from "../core/bridge";
 import { scanModules } from "./moduleService";
 
 const mockRunDaemonCommand = vi.mocked(runDaemonCommand);
-const mockReadModuleProp = vi.mocked(readModuleProp);
 
 describe("scanModules", () => {
   beforeEach(() => {
     mockRunDaemonCommand.mockReset();
-    mockReadModuleProp.mockReset();
   });
 
-  it("parses metadata from the real module.prop template shape", async () => {
+  it("uses module metadata from the daemon payload", async () => {
     mockRunDaemonCommand.mockResolvedValue([
       {
         id: "hybrid_mount",
+        name: "Hybrid Mount",
+        version: "v3.5.6-1648",
+        author: "Hybrid Mount Developers",
+        description: "Waiting for daemon...",
         mode: "overlay",
         is_mounted: true,
         enabled: true,
@@ -31,16 +32,6 @@ describe("scanModules", () => {
         },
       },
     ]);
-    mockReadModuleProp.mockResolvedValue(`id=hybrid_mount
-name=Hybrid Mount
-version=v3.5.6-1648
-versionCode=305006
-author=Hybrid Mount Developers
-description=Waiting for daemon...
-updateJson=https://raw.githubusercontent.com/Hybrid-Mount/meta-hybrid_mount/main/update.json
-metamodule=1
-webuiIcon=launcher.png
-`);
 
     await expect(scanModules()).resolves.toEqual([
       {
@@ -61,41 +52,13 @@ webuiIcon=launcher.png
     ]);
   });
 
-  it("ignores comments and blank lines", async () => {
-    mockRunDaemonCommand.mockResolvedValue([
-      {
-        id: "example",
-        mode: "magic",
-        is_mounted: false,
-        enabled: true,
-        source_path: "/modules/example",
-        rules: {
-          default_mode: "magic",
-          paths: {},
-        },
-      },
-    ]);
-    mockReadModuleProp.mockResolvedValue(`# comment
-
-name = Example Module
-invalid-line
-author = Alice
-`);
-
-    const modules = await scanModules();
-    expect(modules[0]).toMatchObject({
-      id: "example",
-      name: "Example Module",
-      version: "unknown",
-      author: "Alice",
-      description: "No description",
-    });
-  });
-
   it("falls back when metadata fields are missing or empty", async () => {
     mockRunDaemonCommand.mockResolvedValue([
       {
         id: "fallback_mod",
+        name: "",
+        version: "2.0.0",
+        author: " ",
         mode: "overlay",
         is_mounted: true,
         enabled: true,
@@ -106,7 +69,6 @@ author = Alice
         },
       },
     ]);
-    mockReadModuleProp.mockResolvedValue("name=\nversion=2.0.0\n");
 
     const modules = await scanModules();
     expect(modules[0]).toMatchObject({
@@ -118,7 +80,7 @@ author = Alice
     });
   });
 
-  it("falls back when reading module.prop fails", async () => {
+  it("falls back when the daemon payload uses the old shape without metadata", async () => {
     mockRunDaemonCommand.mockResolvedValue([
       {
         id: "broken_mod",
@@ -132,7 +94,6 @@ author = Alice
         },
       },
     ]);
-    mockReadModuleProp.mockRejectedValue(new Error("ENOENT"));
 
     const modules = await scanModules();
     expect(modules[0]).toMatchObject({
@@ -159,7 +120,6 @@ author = Alice
         },
       },
     ]);
-    mockReadModuleProp.mockRejectedValue(new Error("ENOENT"));
 
     const modules = await scanModules();
     expect(modules[0]).toMatchObject({

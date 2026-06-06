@@ -56,6 +56,7 @@ pub fn serve(config: crate::conf::config::Config) -> Result<()> {
     fs::create_dir_all(defs::RUN_DIR)
         .with_context(|| format!("Failed to create daemon run directory {}", defs::RUN_DIR))?;
     cleanup_stale_runtime_files()?;
+    let mut runtime_state = RuntimeState::load().unwrap_or_default();
     let listener = UnixListener::bind(defs::SOCKET_FILE)
         .with_context(|| format!("Failed to bind daemon socket {}", defs::SOCKET_FILE))?;
     fs::set_permissions(defs::SOCKET_FILE, fs::Permissions::from_mode(0o600))
@@ -67,12 +68,9 @@ pub fn serve(config: crate::conf::config::Config) -> Result<()> {
     let webui_session = webui.session();
 
     write_pid_file()?;
-    let state = Arc::new(Mutex::new(RuntimeState::load().unwrap_or_default()));
-    {
-        let mut guard = state.lock().expect("daemon state poisoned");
-        guard.set_daemon_state(true, defs::SOCKET_FILE);
-        guard.save()?;
-    }
+    runtime_state.set_daemon_state(true, defs::SOCKET_FILE);
+    runtime_state.save()?;
+    let state = Arc::new(Mutex::new(runtime_state));
     let _guard = DaemonRuntimeGuard::new(state.clone());
     let shutdown = install_shutdown_flag()?;
     let config_cache = Arc::new(commands::RuntimeConfigCache::new());
@@ -261,7 +259,6 @@ fn write_response(stream: &mut UnixStream, response: &DaemonResponse) -> Result<
 fn cleanup_stale_runtime_files() -> Result<()> {
     cleanup_stale_pid_file()?;
     cleanup_stale_socket(Path::new(defs::SOCKET_FILE))?;
-    mark_state_stopped_if_offline()?;
     Ok(())
 }
 
@@ -315,15 +312,6 @@ fn is_pid_process_alive(pid: i32) -> bool {
         Ok(cmdline) => cmdline.contains("hybrid-mount"),
         Err(_) => true,
     }
-}
-
-fn mark_state_stopped_if_offline() -> Result<()> {
-    let mut state = RuntimeState::load().unwrap_or_default();
-    if !state.daemon.alive {
-        return Ok(());
-    }
-    state.set_daemon_state(false, "");
-    state.save()
 }
 
 fn write_pid_file() -> Result<()> {

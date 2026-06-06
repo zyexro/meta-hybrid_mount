@@ -60,7 +60,7 @@ export default function App() {
   let touchStartY = 0;
   let ticking = false;
   let rafId: number | null = null;
-  let preloadTimer: number | undefined;
+  let cancelRoutePreload: (() => void) | undefined;
   let disposed = false;
 
   const visibleRoutes = createMemo(() =>
@@ -172,10 +172,18 @@ export default function App() {
   onCleanup(() => {
     disposed = true;
     stopSse();
-    if (preloadTimer !== undefined) {
-      window.clearTimeout(preloadTimer);
-    }
+    cancelRoutePreload?.();
   });
+
+  function scheduleIdleTask(callback: () => void, timeout = 1500) {
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(callback, { timeout });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timerId = globalThis.setTimeout(callback, Math.min(timeout, 300));
+    return () => globalThis.clearTimeout(timerId);
+  }
 
   function startRoutePreload() {
     const pendingRoutes = visibleRoutes().filter(
@@ -192,11 +200,11 @@ export default function App() {
       void nextRoute.load();
 
       if (nextIndex < pendingRoutes.length) {
-        preloadTimer = window.setTimeout(preloadNextRoute, 120);
+        cancelRoutePreload = scheduleIdleTask(preloadNextRoute);
       }
     };
 
-    preloadTimer = window.setTimeout(preloadNextRoute, 250);
+    cancelRoutePreload = scheduleIdleTask(preloadNextRoute);
   }
 
   onMount(() => {
@@ -205,36 +213,16 @@ export default function App() {
 
   async function initializeApp() {
     try {
-      // uiStore.init() (locale JSON) and wakeDaemon() are independent
-      await Promise.all([uiStore.init(), API.wakeDaemon()]);
-      setInitialDataReady(true);
-      window.setTimeout(startRoutePreload, 0);
+      const [payload] = await Promise.all([API.init(), uiStore.init()]);
+      if (disposed) return;
+      sysStore.loadFromInit(payload);
       onSseStateUpdate((state) => sysStore.handleSseUpdate(state));
+      configStore.loadFromInit(payload);
+      setInitialDataReady(true);
+      startRoutePreload();
       if (ENABLE_KASUMI) {
-        const kasumiStore = await loadKasumiStore();
-        if (kasumiStore && !disposed) {
-          onSseStateUpdate((state) => {
-            kasumiStore.handleSseUpdate(state);
-            features.setKasumiStatus(
-              kasumiStore.enabled,
-              Boolean(kasumiStore.status?.available),
-              Boolean(kasumiStore.status?.kernel_supported),
-            );
-          });
-        }
+        void initializeKasumi(payload);
       }
-      void sysStore
-        .ensureStatusLoaded()
-        .catch((e: unknown) => console.error("ensureStatusLoaded failed", e));
-      void configStore
-        .loadConfig()
-        .catch((e: unknown) => console.error("loadConfig failed", e));
-      void sysStore
-        .ensureVersionLoaded()
-        .catch((e: unknown) => console.error("ensureVersionLoaded failed", e));
-      window.setTimeout(() => {
-        void loadInitPayload();
-      }, 0);
     } catch (e: unknown) {
       console.error("App initialization failed", e);
       uiStore.showToast(
@@ -246,31 +234,28 @@ export default function App() {
     }
   }
 
-  async function loadInitPayload() {
+  async function initializeKasumi(payload: Awaited<ReturnType<typeof API.init>>) {
     try {
-      const payload = await API.init();
-      if (disposed) return;
-      sysStore.loadFromInit(payload);
-      if (ENABLE_KASUMI) {
-        const kasumiStore = await loadKasumiStore();
-        if (disposed) return;
-        if (kasumiStore) {
-          kasumiStore.loadFromInit(payload);
-          features.setKasumiStatus(
-            kasumiStore.enabled,
-            Boolean(kasumiStore.status?.available),
-            Boolean(kasumiStore.status?.kernel_supported),
-          );
-        }
-      }
-      configStore.loadFromInit(payload);
-    } catch (e: unknown) {
-      if (disposed) return;
-      console.error("Background app initialization failed", e);
-      uiStore.showToast(
-        getErrorMessage(e, "App initialization failed"),
-        "error",
+      const kasumiStore = await loadKasumiStore();
+      if (disposed || !kasumiStore) return;
+      kasumiStore.loadFromInit(payload);
+      features.setKasumiStatus(
+        kasumiStore.enabled,
+        Boolean(kasumiStore.status?.available),
+        Boolean(kasumiStore.status?.kernel_supported),
       );
+      onSseStateUpdate((state) => {
+        kasumiStore.handleSseUpdate(state);
+        features.setKasumiStatus(
+          kasumiStore.enabled,
+          Boolean(kasumiStore.status?.available),
+          Boolean(kasumiStore.status?.kernel_supported),
+        );
+      });
+    } catch (e: unknown) {
+      if (!disposed) {
+        console.error("Kasumi initialization failed", e);
+      }
     }
   }
 

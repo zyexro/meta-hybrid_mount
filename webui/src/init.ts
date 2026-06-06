@@ -3,9 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MdDialog } from "@material/web/dialog/dialog.js";
-import type { DialogAnimation } from "@material/web/dialog/internal/animations.js";
-
 declare global {
   interface Window {
     litDisableBundleWarning: boolean;
@@ -15,15 +12,30 @@ declare global {
 const mdDialogPrototypePatched = Symbol("md-dialog-prototype-patched");
 const mdDialogInstancePatched = Symbol("md-dialog-instance-patched");
 
-type MdDialogPrototype = typeof MdDialog.prototype & {
-  [mdDialogPrototypePatched]?: boolean;
+type DialogAnimation = {
+  dialog?: unknown;
+  scrim?: unknown;
+  container?: unknown;
+  [key: string]: unknown;
 };
 
-type MdDialogElement = InstanceType<typeof MdDialog> & {
+type MdDialogElement = HTMLElement & {
+  getOpenAnimation: () => DialogAnimation;
+  getCloseAnimation: () => DialogAnimation;
   [mdDialogInstancePatched]?: boolean;
 };
 
-const dialogOpenAnimation: DialogAnimation["dialog"] = [
+type MdDialogConstructor = CustomElementConstructor & {
+  prototype: MdDialogElement & {
+    [mdDialogPrototypePatched]?: boolean;
+  };
+};
+
+type MdDialogPrototype = MdDialogConstructor["prototype"] & {
+  [mdDialogPrototypePatched]?: boolean;
+};
+
+const dialogOpenAnimation = [
   [
     [
       { opacity: 0, transform: "translateY(50px)" },
@@ -33,7 +45,7 @@ const dialogOpenAnimation: DialogAnimation["dialog"] = [
   ],
 ];
 
-const dialogCloseAnimation: DialogAnimation["dialog"] = [
+const dialogCloseAnimation = [
   [
     [
       { opacity: 1, transform: "translateY(0)" },
@@ -43,15 +55,15 @@ const dialogCloseAnimation: DialogAnimation["dialog"] = [
   ],
 ];
 
-const scrimOpenAnimation: DialogAnimation["scrim"] = [
+const scrimOpenAnimation = [
   [[{ opacity: 0 }, { opacity: 0.32 }], { duration: 300, easing: "linear" }],
 ];
 
-const scrimCloseAnimation: DialogAnimation["scrim"] = [
+const scrimCloseAnimation = [
   [[{ opacity: 0.32 }, { opacity: 0 }], { duration: 300, easing: "linear" }],
 ];
 
-function applyMdDialogAnimationOverrides() {
+function applyMdDialogAnimationOverrides(MdDialog: MdDialogConstructor) {
   const prototype = MdDialog.prototype as MdDialogPrototype;
   if (prototype[mdDialogPrototypePatched]) {
     return;
@@ -118,11 +130,12 @@ function applyMdDialogAnimationOverrides() {
   prototype[mdDialogPrototypePatched] = true;
 }
 
-if (customElements.get("md-dialog")) {
-  applyMdDialogAnimationOverrides();
+const MdDialog = customElements.get("md-dialog");
+if (MdDialog) {
+  applyMdDialogAnimationOverrides(MdDialog as MdDialogConstructor);
 } else {
-  void customElements.whenDefined("md-dialog").then(() => {
-    applyMdDialogAnimationOverrides();
+  void customElements.whenDefined("md-dialog").then((definedMdDialog) => {
+    applyMdDialogAnimationOverrides(definedMdDialog as MdDialogConstructor);
   });
 }
 
