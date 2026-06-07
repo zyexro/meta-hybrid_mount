@@ -17,8 +17,12 @@ interface KsuModule {
   exec: (cmd: string, options?: unknown) => Promise<KsuExecResult>;
 }
 
-// Discriminated union matching Rust DaemonCommand #[serde(tag = "type", rename_all = "kebab-case")]
+// Discriminated union matching Rust DaemonCommand sub-enums.
+// Wire format is flat: {"type": "kebab-case-name"}.
+// Organized by domain group to match the Rust SystemCommand / ConfigCommand /
+// ModulesCommand / KasumiCommand / BatchCommand sub-enums.
 export type DaemonCommandPayload =
+  // ── SystemCommand: health, lifecycle, storage, info ──
   | { type: "ping" }
   | { type: "webui-start" }
   | { type: "shutdown" }
@@ -30,20 +34,19 @@ export type DaemonCommandPayload =
   | { type: "api-partitions" }
   | { type: "api-system-info" }
   | { type: "api-version" }
+  | { type: "api-kernel-uname" }
+  | { type: "api-open-url"; url: string }
+  | { type: "api-reboot" }
+  | { type: "clear-mount-errors" }
+  // ── ConfigCommand: config CRUD ──
   | { type: "api-config-get" }
   | { type: "api-config-set"; config: unknown }
   | { type: "api-config-patch"; patch: unknown; apply_runtime?: boolean }
   | { type: "api-config-reset" }
+  // ── ModulesCommand: module operations ──
   | { type: "api-modules-list"; path?: string | null }
   | { type: "api-modules-apply"; modules: unknown[] }
-  | { type: "api-lkm" }
-  | { type: "api-hooks" }
-  | { type: "api-kernel-uname" }
-  | { type: "api-open-url"; url: string }
-  | { type: "api-reboot" }
-  | { type: "api-kasumi-maps-add"; rule: unknown }
-  | { type: "api-kasumi-maps-clear" }
-  | { type: "clear-mount-errors" }
+  // ── KasumiCommand: LKM, rules, hide, maps, uname, runtime ──
   | { type: "kasumi-status" }
   | { type: "kasumi-list" }
   | { type: "kasumi-version" }
@@ -75,6 +78,11 @@ export type DaemonCommandPayload =
   | { type: "lkm-status" }
   | { type: "lkm-load" }
   | { type: "lkm-unload" }
+  | { type: "api-lkm" }
+  | { type: "api-hooks" }
+  | { type: "api-kasumi-maps-add"; rule: unknown }
+  | { type: "api-kasumi-maps-clear" }
+  // ── BatchCommand ──
   | { type: "batch"; commands: DaemonCommandPayload[] };
 
 let ksuExec: KsuModule["exec"] | null = null;

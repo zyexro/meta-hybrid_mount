@@ -16,141 +16,13 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+// ── Request / Response envelope ──────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonRequest {
     pub command: DaemonCommand,
     #[serde(default)]
     pub config_path: Option<PathBuf>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-pub enum DaemonCommand {
-    Ping,
-    WebuiStart,
-    Shutdown,
-    Init,
-    Status,
-    ApiStorage,
-    ApiMountStats,
-    ApiMountTopology,
-    ApiPartitions,
-    ApiSystemInfo,
-    ApiVersion,
-    ApiConfigGet,
-    ApiConfigSet {
-        config: serde_json::Value,
-    },
-    ApiConfigPatch {
-        patch: serde_json::Value,
-        #[serde(default)]
-        apply_runtime: bool,
-    },
-    ApiConfigReset,
-    ApiModulesList {
-        path: Option<PathBuf>,
-    },
-    ApiModulesApply {
-        modules: Vec<crate::core::api::ModuleApplyEntry>,
-    },
-    #[cfg(feature = "kasumi")]
-    ApiLkm,
-    #[cfg(feature = "kasumi")]
-    ApiHooks,
-    ApiKernelUname,
-    ApiOpenUrl {
-        url: String,
-    },
-    ApiReboot,
-    #[cfg(feature = "kasumi")]
-    ApiKasumiMapsAdd {
-        rule: serde_json::Value,
-    },
-    #[cfg(feature = "kasumi")]
-    ApiKasumiMapsClear,
-    #[cfg(feature = "kasumi")]
-    KasumiStatus,
-    #[cfg(feature = "kasumi")]
-    KasumiList,
-    #[cfg(feature = "kasumi")]
-    KasumiVersion,
-    #[cfg(feature = "kasumi")]
-    KasumiFeatures,
-    #[cfg(feature = "kasumi")]
-    KasumiHooks,
-    #[cfg(feature = "kasumi")]
-    KasumiApplyConfigRuntime,
-    #[cfg(feature = "kasumi")]
-    HideList,
-    #[cfg(feature = "kasumi")]
-    HideAdd {
-        path: PathBuf,
-    },
-    #[cfg(feature = "kasumi")]
-    HideRemove {
-        path: PathBuf,
-    },
-    #[cfg(feature = "kasumi")]
-    HideApply,
-    #[cfg(feature = "kasumi")]
-    LkmStatus,
-    #[cfg(feature = "kasumi")]
-    LkmLoad,
-    #[cfg(feature = "kasumi")]
-    LkmUnload,
-    #[cfg(feature = "kasumi")]
-    KasumiClear,
-    #[cfg(feature = "kasumi")]
-    KasumiReleaseConnection,
-    #[cfg(feature = "kasumi")]
-    KasumiInvalidateCache,
-    #[cfg(feature = "kasumi")]
-    KasumiFixMounts,
-    #[cfg(feature = "kasumi")]
-    KasumiRestoreUnameGlobal,
-    #[cfg(feature = "kasumi")]
-    KasumiSetUname {
-        mode: String,
-        release: String,
-        version: String,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiClearUname {
-        mode: String,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiRuleAdd {
-        target: PathBuf,
-        source: PathBuf,
-        file_type: Option<i32>,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiRuleMerge {
-        target: PathBuf,
-        source: PathBuf,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiRuleHide {
-        path: PathBuf,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiRuleDelete {
-        path: PathBuf,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiRuleAddDir {
-        target_base: PathBuf,
-        source_dir: PathBuf,
-    },
-    #[cfg(feature = "kasumi")]
-    KasumiRuleRemoveDir {
-        target_base: PathBuf,
-        source_dir: PathBuf,
-    },
-    ClearMountErrors,
-    Batch {
-        commands: Vec<DaemonCommand>,
-    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,4 +50,187 @@ impl DaemonResponse {
             error: Some(message.into()),
         }
     }
+}
+
+// ── Top-level command (untagged → delegates to sub-enums) ────────────────
+
+/// Wire format stays flat: `{"type": "ping"}`, `{"type": "api-config-get"}`, …
+/// The `#[serde(untagged)]` outer enum dispatches deserialization to the
+/// first internally-tagged sub-enum that matches the `"type"` field.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DaemonCommand {
+    System(SystemCommand),
+    Config(ConfigCommand),
+    Modules(ModulesCommand),
+    #[cfg(feature = "kasumi")]
+    Kasumi(KasumiCommand),
+    Batch(BatchCommand),
+}
+
+// ── System: health, lifecycle, storage, info, misc ──────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SystemCommand {
+    #[serde(rename = "ping")]
+    Ping,
+    #[serde(rename = "webui-start")]
+    WebuiStart,
+    #[serde(rename = "shutdown")]
+    Shutdown,
+    #[serde(rename = "init")]
+    Init,
+    #[serde(rename = "status")]
+    Status,
+    #[serde(rename = "api-storage")]
+    ApiStorage,
+    #[serde(rename = "api-mount-stats")]
+    ApiMountStats,
+    #[serde(rename = "api-mount-topology")]
+    ApiMountTopology,
+    #[serde(rename = "api-partitions")]
+    ApiPartitions,
+    #[serde(rename = "api-system-info")]
+    ApiSystemInfo,
+    #[serde(rename = "api-version")]
+    ApiVersion,
+    #[serde(rename = "api-kernel-uname")]
+    ApiKernelUname,
+    #[serde(rename = "api-open-url")]
+    ApiOpenUrl { url: String },
+    #[serde(rename = "api-reboot")]
+    ApiReboot,
+    #[serde(rename = "clear-mount-errors")]
+    ClearMountErrors,
+}
+
+// ── Config: CRUD for the TOML configuration ─────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ConfigCommand {
+    #[serde(rename = "api-config-get")]
+    Get,
+    #[serde(rename = "api-config-set")]
+    Set { config: serde_json::Value },
+    #[serde(rename = "api-config-patch")]
+    Patch {
+        patch: serde_json::Value,
+        #[serde(default)]
+        apply_runtime: bool,
+    },
+    #[serde(rename = "api-config-reset")]
+    Reset,
+}
+
+// ── Modules: module listing and bulk operations ─────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ModulesCommand {
+    #[serde(rename = "api-modules-list")]
+    List { path: Option<PathBuf> },
+    #[serde(rename = "api-modules-apply")]
+    Apply {
+        modules: Vec<crate::core::api::ModuleApplyEntry>,
+    },
+}
+
+// ── Kasumi: LKM, rules, hide, maps, uname, runtime ─────────────────────
+
+#[cfg(feature = "kasumi")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum KasumiCommand {
+    // -- core status / info
+    #[serde(rename = "kasumi-status")]
+    Status,
+    #[serde(rename = "kasumi-list")]
+    List,
+    #[serde(rename = "kasumi-version")]
+    Version,
+    #[serde(rename = "kasumi-features")]
+    Features,
+    #[serde(rename = "kasumi-hooks")]
+    Hooks,
+    #[serde(rename = "kasumi-apply-config-runtime")]
+    ApplyConfigRuntime,
+    #[serde(rename = "kasumi-clear")]
+    Clear,
+    #[serde(rename = "kasumi-release-connection")]
+    ReleaseConnection,
+    #[serde(rename = "kasumi-invalidate-cache")]
+    InvalidateCache,
+    #[serde(rename = "kasumi-fix-mounts")]
+    FixMounts,
+    // -- uname
+    #[serde(rename = "kasumi-restore-uname-global")]
+    RestoreUnameGlobal,
+    #[serde(rename = "kasumi-set-uname")]
+    SetUname {
+        mode: String,
+        release: String,
+        version: String,
+    },
+    #[serde(rename = "kasumi-clear-uname")]
+    ClearUname { mode: String },
+    // -- rules
+    #[serde(rename = "kasumi-rule-add")]
+    RuleAdd {
+        target: PathBuf,
+        source: PathBuf,
+        file_type: Option<i32>,
+    },
+    #[serde(rename = "kasumi-rule-merge")]
+    RuleMerge { target: PathBuf, source: PathBuf },
+    #[serde(rename = "kasumi-rule-hide")]
+    RuleHide { path: PathBuf },
+    #[serde(rename = "kasumi-rule-delete")]
+    RuleDelete { path: PathBuf },
+    #[serde(rename = "kasumi-rule-add-dir")]
+    RuleAddDir {
+        target_base: PathBuf,
+        source_dir: PathBuf,
+    },
+    #[serde(rename = "kasumi-rule-remove-dir")]
+    RuleRemoveDir {
+        target_base: PathBuf,
+        source_dir: PathBuf,
+    },
+    // -- user hide
+    #[serde(rename = "hide-list")]
+    HideList,
+    #[serde(rename = "hide-add")]
+    HideAdd { path: PathBuf },
+    #[serde(rename = "hide-remove")]
+    HideRemove { path: PathBuf },
+    #[serde(rename = "hide-apply")]
+    HideApply,
+    // -- LKM
+    #[serde(rename = "lkm-status")]
+    LkmStatus,
+    #[serde(rename = "lkm-load")]
+    LkmLoad,
+    #[serde(rename = "lkm-unload")]
+    LkmUnload,
+    // -- legacy API aliases
+    #[serde(rename = "api-lkm")]
+    ApiLkm,
+    #[serde(rename = "api-hooks")]
+    ApiHooks,
+    // -- maps spoof
+    #[serde(rename = "api-kasumi-maps-add")]
+    MapsAdd { rule: serde_json::Value },
+    #[serde(rename = "api-kasumi-maps-clear")]
+    MapsClear,
+}
+
+// ── Batch: multiple commands in one round-trip ──────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum BatchCommand {
+    #[serde(rename = "batch")]
+    Batch { commands: Vec<DaemonCommand> },
 }

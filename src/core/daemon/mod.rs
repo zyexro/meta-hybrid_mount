@@ -16,5 +16,4 @@ mod client;
 pub(crate) mod protocol;
 mod server;
 
-pub(crate) use self::protocol::DaemonCommand;
 pub use self::{client::dispatch, server::serve};

@@ -32,7 +32,9 @@ use serde::Serialize;
 use serde_json::{Value, json};
 
 use super::{
-    super::protocol::DaemonCommand,
+    super::protocol::{
+        BatchCommand, ConfigCommand, DaemonCommand, KasumiCommand, ModulesCommand, SystemCommand,
+    },
     http::{self, WebuiHttpSession},
 };
 use crate::{
@@ -222,98 +224,146 @@ fn cached_status_and_snapshot(state: &Arc<Mutex<RuntimeState>>) -> Result<(Value
     Ok((status_value, guard.clone()))
 }
 
+// ── Top-level dispatch ──────────────────────────────────────────────────
+
 pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand) -> Result<Value> {
+    match command {
+        DaemonCommand::System(cmd) => dispatch_system(ctx, cmd),
+        DaemonCommand::Config(cmd) => dispatch_config(ctx, cmd),
+        DaemonCommand::Modules(cmd) => dispatch_modules(ctx, cmd),
+        #[cfg(feature = "kasumi")]
+        DaemonCommand::Kasumi(cmd) => dispatch_kasumi(ctx, cmd),
+        DaemonCommand::Batch(BatchCommand::Batch { commands }) => dispatch_batch(ctx, commands),
+    }
+}
+
+// ── System commands ─────────────────────────────────────────────────────
+
+fn dispatch_system(ctx: &CommandContext<'_>, cmd: SystemCommand) -> Result<Value> {
     let config = ctx.config;
-    let config_path = ctx.config_path;
-    let config_cache = ctx.config_cache;
     let state = ctx.state;
     let shutdown = ctx.shutdown;
     let webui = ctx.webui;
     let sse_clients = ctx.sse_clients;
 
-    match command {
-        DaemonCommand::Ping => to_value(&json!({ "status": "ok" })),
-        DaemonCommand::WebuiStart => Ok(webui.session_payload()),
-        DaemonCommand::Init => {
-            let (status_value, snapshot) = cached_status_and_snapshot(state)?;
-            let mut config_value = to_value(config)?;
-            // When Kasumi is not usable (kernel too old, LKM not present, or
-            // protocol mismatch) force kasumi.enabled = false.  When the Kasumi
-            // feature is not even compiled in (lite/nano builds), strip the
-            // entire [kasumi] section from the reported config.  Both paths
-            // ensure the WebUI never shows a non-existent Kasumi mode — even
-            // when switching from a full to lite build with a stale WebUI.
-            #[cfg(feature = "kasumi")]
-            {
-                if (!config.kasumi.enabled || !kasumi::can_operate())
-                    && let Some(kasumi_val) = config_value.get_mut("kasumi")
-                    && let Some(enabled) = kasumi_val.get_mut("enabled")
-                {
-                    *enabled = json!(false);
-                }
-            }
-            #[cfg(not(feature = "kasumi"))]
-            {
-                // Strip the entire [kasumi] section from the reported config so
-                // the WebUI never sees any kasumi data after switching from a
-                // full to a lite build.  (Forcing just enabled=false leaves the
-                // rest of the section intact, which can confuse the WebUI when
-                // ENABLE_KASUMI is accidentally true in a stale WebUI bundle.)
-                config_value.as_object_mut().map(|obj| obj.remove("kasumi"));
-            }
-            let version_value = to_value(&api::build_version_payload())?;
-            let system_info_value = to_value(&api::build_system_info_payload(&snapshot))?;
-            #[cfg(feature = "kasumi")]
-            {
-                let kasumi_status_value = build_kasumi_runtime_json(config, &snapshot)?;
-                to_value(&json!({
-                    "status": status_value,
-                    "config": config_value,
-                    "version": version_value,
-                    "kasumi_status": kasumi_status_value,
-                    "system_info": system_info_value,
-                }))
-            }
-            #[cfg(not(feature = "kasumi"))]
-            to_value(&json!({
-                "status": status_value,
-                "config": config_value,
-                "version": version_value,
-                "system_info": system_info_value,
-            }))
-        }
-        DaemonCommand::Shutdown => {
+    match cmd {
+        SystemCommand::Ping => to_value(&json!({ "status": "ok" })),
+        SystemCommand::WebuiStart => Ok(webui.session_payload()),
+        SystemCommand::Shutdown => {
             shutdown.store(true, Ordering::Relaxed);
             to_value(&json!({ "shutdown": true }))
         }
-        DaemonCommand::Status => cached_status_value(state),
-        DaemonCommand::ApiStorage => {
+        SystemCommand::Init => dispatch_init(ctx),
+        SystemCommand::Status => cached_status_value(state),
+        SystemCommand::ApiStorage => {
             let snapshot = runtime_snapshot(state);
             to_value(&api::build_storage_payload(&snapshot))
         }
-        DaemonCommand::ApiMountStats => {
+        SystemCommand::ApiMountStats => {
             let snapshot = runtime_snapshot(state);
             to_value(&api::build_mount_stats_payload(&snapshot))
         }
-        DaemonCommand::ApiMountTopology => {
+        SystemCommand::ApiMountTopology => {
             let snapshot = runtime_snapshot(state);
             to_value(&api::build_mount_topology_payload(config, &snapshot))
         }
-        DaemonCommand::ApiPartitions => to_value(&api::build_partitions_payload(config)),
-        DaemonCommand::ApiSystemInfo => {
+        SystemCommand::ApiPartitions => to_value(&api::build_partitions_payload(config)),
+        SystemCommand::ApiSystemInfo => {
             let snapshot = runtime_snapshot(state);
             to_value(&api::build_system_info_payload(&snapshot))
         }
-        DaemonCommand::ApiVersion => to_value(&api::build_version_payload()),
-        DaemonCommand::ApiConfigGet => to_value(config),
-        DaemonCommand::ApiConfigSet { config: payload } => {
+        SystemCommand::ApiVersion => to_value(&api::build_version_payload()),
+        SystemCommand::ApiKernelUname => to_value(&read_kernel_uname_payload()?),
+        SystemCommand::ApiOpenUrl { url } => {
+            open_url(&url)?;
+            to_value(&json!({ "opened": true }))
+        }
+        SystemCommand::ApiReboot => {
+            reboot_device()?;
+            to_value(&json!({ "reboot": true }))
+        }
+        SystemCommand::ClearMountErrors => {
+            let removed_markers = clear_mount_error_markers(config)?;
+            let mut guard = state.lock().expect("daemon state poisoned");
+            let cleared = guard.mount_error_modules.len();
+            guard.mount_error_modules.clear();
+            guard.mount_error_reasons.clear();
+            guard.save()?;
+            drop(guard);
+            http::broadcast_sse_event(state, sse_clients, "state_update");
+            to_value(&json!({ "cleared": cleared, "removed_markers": removed_markers }))
+        }
+    }
+}
+
+fn dispatch_init(ctx: &CommandContext<'_>) -> Result<Value> {
+    let config = ctx.config;
+    let state = ctx.state;
+
+    let (status_value, snapshot) = cached_status_and_snapshot(state)?;
+    let mut config_value = to_value(config)?;
+    // When Kasumi is not usable (kernel too old, LKM not present, or
+    // protocol mismatch) force kasumi.enabled = false.  When the Kasumi
+    // feature is not even compiled in (lite/nano builds), strip the
+    // entire [kasumi] section from the reported config.  Both paths
+    // ensure the WebUI never shows a non-existent Kasumi mode — even
+    // when switching from a full to lite build with a stale WebUI.
+    #[cfg(feature = "kasumi")]
+    {
+        if (!config.kasumi.enabled || !kasumi::can_operate())
+            && let Some(kasumi_val) = config_value.get_mut("kasumi")
+            && let Some(enabled) = kasumi_val.get_mut("enabled")
+        {
+            *enabled = json!(false);
+        }
+    }
+    #[cfg(not(feature = "kasumi"))]
+    {
+        // Strip the entire [kasumi] section from the reported config so
+        // the WebUI never sees any kasumi data after switching from a
+        // full to a lite build.  (Forcing just enabled=false leaves the
+        // rest of the section intact, which can confuse the WebUI when
+        // ENABLE_KASUMI is accidentally true in a stale WebUI bundle.)
+        config_value.as_object_mut().map(|obj| obj.remove("kasumi"));
+    }
+    let version_value = to_value(&api::build_version_payload())?;
+    let system_info_value = to_value(&api::build_system_info_payload(&snapshot))?;
+    #[cfg(feature = "kasumi")]
+    {
+        let kasumi_status_value = build_kasumi_runtime_json(config, &snapshot)?;
+        to_value(&json!({
+            "status": status_value,
+            "config": config_value,
+            "version": version_value,
+            "kasumi_status": kasumi_status_value,
+            "system_info": system_info_value,
+        }))
+    }
+    #[cfg(not(feature = "kasumi"))]
+    to_value(&json!({
+        "status": status_value,
+        "config": config_value,
+        "version": version_value,
+        "system_info": system_info_value,
+    }))
+}
+
+// ── Config commands ─────────────────────────────────────────────────────
+
+fn dispatch_config(ctx: &CommandContext<'_>, cmd: ConfigCommand) -> Result<Value> {
+    let config = ctx.config;
+    let config_path = ctx.config_path;
+
+    match cmd {
+        ConfigCommand::Get => to_value(config),
+        ConfigCommand::Set { config: payload } => {
             let config: Config =
                 serde_json::from_value(payload).context("Failed to decode config payload")?;
             config.save_to_file(config_path)?;
             ctx.cache_config(config.clone())?;
             ctx.refresh(&config, json!({ "saved": true, "config": &config }))
         }
-        DaemonCommand::ApiConfigPatch {
+        ConfigCommand::Patch {
             patch,
             apply_runtime,
         } => {
@@ -332,13 +382,24 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
                 }),
             )
         }
-        DaemonCommand::ApiConfigReset => {
+        ConfigCommand::Reset => {
             let config = Config::default();
             save_and_apply_runtime_config(&config, config_path)?;
             ctx.cache_config(config.clone())?;
             ctx.refresh(&config, json!({ "saved": true, "config": &config }))
         }
-        DaemonCommand::ApiModulesList { path } => {
+    }
+}
+
+// ── Modules commands ────────────────────────────────────────────────────
+
+fn dispatch_modules(ctx: &CommandContext<'_>, cmd: ModulesCommand) -> Result<Value> {
+    let config = ctx.config;
+    let config_path = ctx.config_path;
+    let state = ctx.state;
+
+    match cmd {
+        ModulesCommand::List { path } => {
             let snapshot = runtime_snapshot(state);
             to_value(&api::build_modules_payload(
                 config,
@@ -346,30 +407,184 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
                 path.as_deref(),
             )?)
         }
-        DaemonCommand::ApiModulesApply { modules } => {
+        ModulesCommand::Apply { modules } => {
             let payload = api::apply_modules_payload(config_path, &modules)?;
             let config = load_runtime_config_uncached(config_path)?;
             ctx.cache_config(config.clone())?;
             ctx.refresh(&config, payload)
         }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::ApiLkm => to_value(&api::build_lkm_payload(config)),
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::ApiHooks => {
+    }
+}
+
+// ── Kasumi commands ─────────────────────────────────────────────────────
+
+#[cfg(feature = "kasumi")]
+fn dispatch_kasumi(ctx: &CommandContext<'_>, cmd: KasumiCommand) -> Result<Value> {
+    let config = ctx.config;
+    let config_path = ctx.config_path;
+    let config_cache = ctx.config_cache;
+    let state = ctx.state;
+
+    match cmd {
+        KasumiCommand::Status => {
+            let snapshot = runtime_snapshot(state);
+            build_kasumi_runtime_json(config, &snapshot)
+        }
+        KasumiCommand::List => {
+            let payload = if kasumi_mount::can_operate(config) {
+                api::parse_kasumi_rule_listing(&kasumi::list_rules()?)
+            } else {
+                Vec::new()
+            };
+            to_value(&payload)
+        }
+        KasumiCommand::Version => {
+            let snapshot = runtime_snapshot(state);
+            to_value(&api::build_kasumi_version_payload(config, &snapshot))
+        }
+        KasumiCommand::Features => to_value(&api::build_features_payload()),
+        KasumiCommand::Hooks => to_value(&kasumi_mount::hook_lines()?),
+        KasumiCommand::ApplyConfigRuntime => {
+            let applied = apply_runtime_config(config)?;
+            ctx.refresh_current(json!({ "applied": applied }))
+        }
+        KasumiCommand::Clear => {
+            kasumi::clear_rules()?;
+            ctx.refresh_message("Kasumi rules cleared.")
+        }
+        KasumiCommand::ReleaseConnection => {
+            kasumi::release_connection();
+            ctx.refresh_message("Released cached Kasumi client connection.")
+        }
+        KasumiCommand::InvalidateCache => {
+            kasumi::invalidate_status_cache();
+            ctx.refresh_message("Invalidated cached Kasumi status.")
+        }
+        KasumiCommand::FixMounts => {
+            kasumi::fix_mounts()?;
+            ctx.refresh_message("Kasumi mount ordering fixed.")
+        }
+        KasumiCommand::RestoreUnameGlobal => {
+            kasumi::restore_uname_global()?;
+            ctx.refresh_message("Kasumi global uname restored.")
+        }
+        KasumiCommand::SetUname {
+            mode,
+            release,
+            version,
+        } => {
+            let mode = parse_uname_mode(&mode)?;
+            apply_uname(mode, &release, &version)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi uname applied.",
+                "mode": display_uname_mode(mode),
+                "release": release,
+                "version": version,
+            }))
+        }
+        KasumiCommand::ClearUname { mode } => {
+            let mode = parse_uname_mode(&mode)?;
+            match mode {
+                schema::KasumiUnameMode::Scoped => {
+                    apply_uname(schema::KasumiUnameMode::Scoped, "", "")?
+                }
+                schema::KasumiUnameMode::Global => kasumi::restore_uname_global()?,
+            }
+            ctx.refresh_current(json!({
+                "message": "Kasumi uname cleared.",
+                "mode": display_uname_mode(mode),
+            }))
+        }
+        KasumiCommand::RuleAdd {
+            target,
+            source,
+            file_type,
+        } => {
+            let file_type = file_type.unwrap_or(detect_rule_file_type(&source)?);
+            kasumi::add_rule(&target, &source, file_type)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi ADD rule applied.",
+                "target": target,
+                "source": source,
+                "file_type": file_type,
+            }))
+        }
+        KasumiCommand::RuleMerge { target, source } => {
+            kasumi::add_merge_rule(&target, &source)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi MERGE rule applied.",
+                "target": target,
+                "source": source,
+            }))
+        }
+        KasumiCommand::RuleHide { path } => {
+            kasumi::hide_path(&path)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi HIDE rule applied.",
+                "path": path,
+            }))
+        }
+        KasumiCommand::RuleDelete { path } => {
+            kasumi::delete_rule(&path)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi rule deleted.",
+                "path": path,
+            }))
+        }
+        KasumiCommand::RuleAddDir {
+            target_base,
+            source_dir,
+        } => {
+            kasumi::add_rules_from_directory(&target_base, &source_dir)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi directory rules applied.",
+                "target_base": target_base,
+                "source_dir": source_dir,
+            }))
+        }
+        KasumiCommand::RuleRemoveDir {
+            target_base,
+            source_dir,
+        } => {
+            kasumi::remove_rules_from_directory(&target_base, &source_dir)?;
+            ctx.refresh_current(json!({
+                "message": "Kasumi directory rules removed.",
+                "target_base": target_base,
+                "source_dir": source_dir,
+            }))
+        }
+        KasumiCommand::HideList => to_value(&user_hide_rules::load_user_hide_rules()?),
+        KasumiCommand::HideAdd { path } => {
+            let added = user_hide_rules::add_user_hide_rule(&path)?;
+            if added && kasumi_mount::can_operate(config) {
+                kasumi::hide_path(&path)?;
+            }
+            ctx.refresh_current(json!({ "added": added, "path": path }))
+        }
+        KasumiCommand::HideRemove { path } => {
+            let removed = user_hide_rules::remove_user_hide_rule(&path)?;
+            ctx.refresh_current(json!({ "removed": removed, "path": path }))
+        }
+        KasumiCommand::HideApply => {
+            kasumi_mount::require_live(config, "apply user hide rules")?;
+            let (applied, failed) = user_hide_rules::apply_user_hide_rules()?;
+            ctx.refresh_current(json!({ "applied": applied, "failed": failed }))
+        }
+        KasumiCommand::LkmStatus => to_value(&api::build_lkm_payload(config)),
+        KasumiCommand::LkmLoad => {
+            lkm::load(&config.kasumi)?;
+            ctx.invalidate_and_refresh_message("Kasumi LKM loaded.")
+        }
+        KasumiCommand::LkmUnload => {
+            lkm::unload(&config.kasumi)?;
+            ctx.invalidate_and_refresh_message("Kasumi LKM unloaded.")
+        }
+        KasumiCommand::ApiLkm => to_value(&api::build_lkm_payload(config)),
+        KasumiCommand::ApiHooks => {
             kasumi_mount::require_live(config, "read Kasumi hooks")?;
             to_value(&kasumi_mount::hook_lines()?)
         }
-        DaemonCommand::ApiKernelUname => to_value(&read_kernel_uname_payload()?),
-        DaemonCommand::ApiOpenUrl { url } => {
-            open_url(&url)?;
-            to_value(&json!({ "opened": true }))
-        }
-        DaemonCommand::ApiReboot => {
-            reboot_device()?;
-            to_value(&json!({ "reboot": true }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::ApiKasumiMapsAdd { rule } => {
+        KasumiCommand::MapsAdd { rule } => {
             let updated = add_kasumi_maps_config_rule(config_path, rule)?;
             ctx.cache_config(updated.clone())?;
             apply_runtime_config(&updated)?;
@@ -383,8 +598,7 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
                 }),
             )
         }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::ApiKasumiMapsClear => {
+        KasumiCommand::MapsClear => {
             let mut updated = load_runtime_config(config_cache, config_path)?
                 .as_ref()
                 .clone();
@@ -401,219 +615,32 @@ pub(super) fn dispatch_command(ctx: &CommandContext<'_>, command: DaemonCommand)
                 }),
             )
         }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiStatus => {
-            let snapshot = runtime_snapshot(state);
-            build_kasumi_runtime_json(config, &snapshot)
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiList => {
-            let payload = if kasumi_mount::can_operate(config) {
-                api::parse_kasumi_rule_listing(&kasumi::list_rules()?)
-            } else {
-                Vec::new()
-            };
-            to_value(&payload)
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiVersion => {
-            let snapshot = runtime_snapshot(state);
-            to_value(&api::build_kasumi_version_payload(config, &snapshot))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiFeatures => to_value(&api::build_features_payload()),
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiHooks => to_value(&kasumi_mount::hook_lines()?),
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiApplyConfigRuntime => {
-            let applied = apply_runtime_config(config)?;
-            ctx.refresh_current(json!({ "applied": applied }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::HideList => to_value(&user_hide_rules::load_user_hide_rules()?),
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::HideAdd { path } => {
-            let added = user_hide_rules::add_user_hide_rule(&path)?;
-            if added && kasumi_mount::can_operate(config) {
-                kasumi::hide_path(&path)?;
-            }
-            ctx.refresh_current(json!({ "added": added, "path": path }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::HideRemove { path } => {
-            let removed = user_hide_rules::remove_user_hide_rule(&path)?;
-            ctx.refresh_current(json!({ "removed": removed, "path": path }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::HideApply => {
-            kasumi_mount::require_live(config, "apply user hide rules")?;
-            let (applied, failed) = user_hide_rules::apply_user_hide_rules()?;
-            ctx.refresh_current(json!({ "applied": applied, "failed": failed }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::LkmStatus => to_value(&api::build_lkm_payload(config)),
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::LkmLoad => {
-            lkm::load(&config.kasumi)?;
-            ctx.invalidate_and_refresh_message("Kasumi LKM loaded.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::LkmUnload => {
-            lkm::unload(&config.kasumi)?;
-            ctx.invalidate_and_refresh_message("Kasumi LKM unloaded.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiClear => {
-            kasumi::clear_rules()?;
-            ctx.refresh_message("Kasumi rules cleared.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiReleaseConnection => {
-            kasumi::release_connection();
-            ctx.refresh_message("Released cached Kasumi client connection.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiInvalidateCache => {
-            kasumi::invalidate_status_cache();
-            ctx.refresh_message("Invalidated cached Kasumi status.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiFixMounts => {
-            kasumi::fix_mounts()?;
-            ctx.refresh_message("Kasumi mount ordering fixed.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRestoreUnameGlobal => {
-            kasumi::restore_uname_global()?;
-            ctx.refresh_message("Kasumi global uname restored.")
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiSetUname {
-            mode,
-            release,
-            version,
-        } => {
-            let mode = parse_uname_mode(&mode)?;
-            apply_uname(mode, &release, &version)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi uname applied.",
-                "mode": display_uname_mode(mode),
-                "release": release,
-                "version": version,
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiClearUname { mode } => {
-            let mode = parse_uname_mode(&mode)?;
-            match mode {
-                schema::KasumiUnameMode::Scoped => {
-                    apply_uname(schema::KasumiUnameMode::Scoped, "", "")?
-                }
-                schema::KasumiUnameMode::Global => kasumi::restore_uname_global()?,
-            }
-            ctx.refresh_current(json!({
-                "message": "Kasumi uname cleared.",
-                "mode": display_uname_mode(mode),
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRuleAdd {
-            target,
-            source,
-            file_type,
-        } => {
-            let file_type = file_type.unwrap_or(detect_rule_file_type(&source)?);
-            kasumi::add_rule(&target, &source, file_type)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi ADD rule applied.",
-                "target": target,
-                "source": source,
-                "file_type": file_type,
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRuleMerge { target, source } => {
-            kasumi::add_merge_rule(&target, &source)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi MERGE rule applied.",
-                "target": target,
-                "source": source,
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRuleHide { path } => {
-            kasumi::hide_path(&path)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi HIDE rule applied.",
-                "path": path,
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRuleDelete { path } => {
-            kasumi::delete_rule(&path)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi rule deleted.",
-                "path": path,
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRuleAddDir {
-            target_base,
-            source_dir,
-        } => {
-            kasumi::add_rules_from_directory(&target_base, &source_dir)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi directory rules applied.",
-                "target_base": target_base,
-                "source_dir": source_dir,
-            }))
-        }
-        #[cfg(feature = "kasumi")]
-        DaemonCommand::KasumiRuleRemoveDir {
-            target_base,
-            source_dir,
-        } => {
-            kasumi::remove_rules_from_directory(&target_base, &source_dir)?;
-            ctx.refresh_current(json!({
-                "message": "Kasumi directory rules removed.",
-                "target_base": target_base,
-                "source_dir": source_dir,
-            }))
-        }
-        DaemonCommand::ClearMountErrors => {
-            let removed_markers = clear_mount_error_markers(config)?;
-            let mut guard = state.lock().expect("daemon state poisoned");
-            let cleared = guard.mount_error_modules.len();
-            guard.mount_error_modules.clear();
-            guard.mount_error_reasons.clear();
-            guard.save()?;
-            drop(guard);
-            http::broadcast_sse_event(state, sse_clients, "state_update");
-            to_value(&json!({ "cleared": cleared, "removed_markers": removed_markers }))
-        }
-        DaemonCommand::Batch { commands } => {
-            let noop_clients = Arc::new(Mutex::new(Vec::new()));
-            let batch_ctx = CommandContext::new(
-                config,
-                config_path,
-                config_cache,
-                state,
-                shutdown,
-                webui,
-                &noop_clients,
-            );
-            let mut results: Vec<Value> = Vec::with_capacity(commands.len());
-            for cmd in commands {
-                let result = match dispatch_command(&batch_ctx, cmd) {
-                    Ok(value) => json!({ "ok": true, "data": value }),
-                    Err(err) => json!({ "ok": false, "error": format!("{err}") }),
-                };
-                results.push(result);
-            }
-            ctx.refresh_runtime_snapshot(config)?;
-            to_value(&json!({ "results": results }))
-        }
     }
+}
+
+// ── Batch commands ──────────────────────────────────────────────────────
+
+fn dispatch_batch(ctx: &CommandContext<'_>, commands: Vec<DaemonCommand>) -> Result<Value> {
+    let noop_clients = Arc::new(Mutex::new(Vec::new()));
+    let batch_ctx = CommandContext::new(
+        ctx.config,
+        ctx.config_path,
+        ctx.config_cache,
+        ctx.state,
+        ctx.shutdown,
+        ctx.webui,
+        &noop_clients,
+    );
+    let mut results: Vec<Value> = Vec::with_capacity(commands.len());
+    for cmd in commands {
+        let result = match dispatch_command(&batch_ctx, cmd) {
+            Ok(value) => json!({ "ok": true, "data": value }),
+            Err(err) => json!({ "ok": false, "error": format!("{err}") }),
+        };
+        results.push(result);
+    }
+    ctx.refresh_runtime_snapshot(ctx.config)?;
+    to_value(&json!({ "results": results }))
 }
 
 fn patch_config_file(config_path: &Path, patch: Value) -> Result<Config> {
