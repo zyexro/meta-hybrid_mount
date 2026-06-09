@@ -234,7 +234,9 @@ export default function App() {
     }
   }
 
-  async function initializeKasumi(payload: Awaited<ReturnType<typeof API.init>>) {
+  async function initializeKasumi(
+    payload: Awaited<ReturnType<typeof API.init>>,
+  ) {
     try {
       const kasumiStore = await loadKasumiStore();
       if (disposed || !kasumiStore) return;

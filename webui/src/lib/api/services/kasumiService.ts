@@ -8,7 +8,7 @@ import type {
 import { patchConfigFile } from "../repos/configRepo";
 import { buildKasumiStatusFromPayload } from "../codec/runtimeCodec";
 import { AppError } from "../core/error";
-import { isRecord, isString } from "../core/guards";
+import { kasumiStatusSchema, kernelUnameSchema } from "../schemas";
 
 async function applyKasumiRuntimeConfig(): Promise<void> {
   await runDaemonCommand({ type: "kasumi-apply-config-runtime" }, PATHS.BINARY);
@@ -25,9 +25,8 @@ async function updateKasumiConfig(
 }
 
 export async function getKasumiStatus(): Promise<KasumiStatus> {
-  const payload = await runDaemonCommand(
-    { type: "kasumi-status" },
-    PATHS.BINARY,
+  const payload = kasumiStatusSchema.parse(
+    await runDaemonCommand({ type: "kasumi-status" }, PATHS.BINARY),
   );
   const status = buildKasumiStatusFromPayload(
     payload,
@@ -59,21 +58,13 @@ export async function setKasumiDebug(enabled: boolean): Promise<void> {
 }
 
 export async function getOriginalKernelUname(): Promise<KernelUnameValues> {
-  const payload = await runDaemonCommand(
-    { type: "api-kernel-uname" },
-    PATHS.BINARY,
+  const payload = kernelUnameSchema.parse(
+    await runDaemonCommand({ type: "api-kernel-uname" }, PATHS.BINARY),
   );
-  if (
-    isRecord(payload) &&
-    isString(payload.release) &&
-    isString(payload.version)
-  ) {
-    return {
-      release: payload.release.trim(),
-      version: payload.version.trim(),
-    };
-  }
-  throw new AppError("Failed to read original kernel uname values");
+  return {
+    release: payload.release.trim(),
+    version: payload.version.trim(),
+  };
 }
 
 export async function setKasumiUnameMode(

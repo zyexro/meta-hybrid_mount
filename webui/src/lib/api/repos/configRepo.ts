@@ -2,13 +2,18 @@ import { PATHS } from "../../constants";
 import { ENABLE_KASUMI } from "../../constants_gen";
 import type { AppConfig } from "../../types";
 import { runDaemonCommand } from "../core/bridge";
-import { isRecord } from "../core/guards";
 import { normalizeConfig } from "../codec/configCodec";
 
 export function extractConfig(payload: unknown): AppConfig {
   // api-config-patch and api-config-set responses wrap the updated config in a `config` field;
   // api-config-get returns the config object directly.
-  if (isRecord(payload) && isRecord(payload.config)) {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "config" in payload &&
+    payload.config &&
+    typeof payload.config === "object"
+  ) {
     return normalizeConfig(payload.config);
   }
   return normalizeConfig(payload);

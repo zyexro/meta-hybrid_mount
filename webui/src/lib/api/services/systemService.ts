@@ -6,29 +6,32 @@ import {
   hasExecBridge,
   runDaemonCommand,
 } from "../core/bridge";
-import { isBoolean, isRecord, isString, isStringArray } from "../core/guards";
+import {
+  initPayloadSchema,
+  systemInfoSchema,
+  versionSchema,
+  runtimeStateSchema,
+} from "../schemas";
 import { buildModeStats, buildMountedCount } from "../codec/runtimeCodec";
-import { loadRuntimeState } from "../repos/runtimeRepo";
 
 export async function init(): Promise<InitPayload> {
-  const payload = await runDaemonCommand({ type: "init" }, PATHS.BINARY);
-  if (!isRecord(payload)) {
-    throw new Error("init payload is invalid");
-  }
-  return payload as unknown as InitPayload;
+  const raw = await runDaemonCommand({ type: "init" }, PATHS.BINARY);
+  return initPayloadSchema.parse(raw) as InitPayload;
 }
 
 export async function getStorageUsage(): Promise<StorageStatus> {
   try {
-    const state = await loadRuntimeState();
+    const state = runtimeStateSchema.parse(
+      await runDaemonCommand({ type: "status" }, PATHS.BINARY),
+    );
     const modeStats = buildModeStats(state);
     return {
       type:
-        isString(state.storage_mode) && state.storage_mode.trim()
+        state.storage_mode && state.storage_mode.trim()
           ? (state.storage_mode as StorageStatus["type"])
           : "unknown",
       error:
-        isString(state.mount_point) && state.mount_point.trim()
+        state.mount_point && state.mount_point.trim()
           ? undefined
           : "Not mounted",
       supported_modes: ["tmpfs", "ext4"],
@@ -46,41 +49,25 @@ export async function getStorageUsage(): Promise<StorageStatus> {
 }
 
 export async function getSystemInfo(): Promise<SystemInfo> {
-  const payload = await runDaemonCommand(
-    { type: "api-system-info" },
-    PATHS.BINARY,
+  const payload = systemInfoSchema.parse(
+    await runDaemonCommand({ type: "api-system-info" }, PATHS.BINARY),
   );
-  if (!isRecord(payload)) {
-    throw new Error("system info payload is invalid");
-  }
   return {
-    kernel: isString(payload.kernel) ? payload.kernel : "Unknown",
-    selinux: isString(payload.selinux) ? payload.selinux : "Unknown",
-    mountBase: isString(payload.mount_base) ? payload.mount_base : "-",
-    activeMounts: isStringArray(payload.active_mounts)
-      ? payload.active_mounts
-      : [],
-    tmpfs_xattr_supported: isBoolean(payload.tmpfs_xattr_supported)
-      ? payload.tmpfs_xattr_supported
-      : undefined,
+    kernel: payload.kernel,
+    selinux: payload.selinux,
+    mountBase: payload.mount_base,
+    activeMounts: payload.active_mounts,
+    tmpfs_xattr_supported: payload.tmpfs_xattr_supported,
     supported_overlay_modes:
-      Array.isArray(payload.supported_overlay_modes) &&
-      payload.supported_overlay_modes.every(isString)
-        ? (payload.supported_overlay_modes as SystemInfo["supported_overlay_modes"])
-        : ["tmpfs", "ext4"],
+      payload.supported_overlay_modes as SystemInfo["supported_overlay_modes"],
   };
 }
 
 export async function getVersion(): Promise<string> {
-  const payload = await runDaemonCommand({ type: "api-version" }, PATHS.BINARY);
-  if (
-    isRecord(payload) &&
-    isString(payload.version) &&
-    payload.version.trim()
-  ) {
-    return payload.version;
-  }
-  return defaultVersion;
+  const payload = versionSchema.parse(
+    await runDaemonCommand({ type: "api-version" }, PATHS.BINARY),
+  );
+  return payload.version.trim() || defaultVersion;
 }
 
 export async function reboot(): Promise<void> {

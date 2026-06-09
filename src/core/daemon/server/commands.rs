@@ -31,10 +31,10 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 use serde_json::{Value, json};
 
+#[cfg(feature = "kasumi")]
+use super::super::protocol::KasumiCommand;
 use super::{
-    super::protocol::{
-        BatchCommand, ConfigCommand, DaemonCommand, KasumiCommand, ModulesCommand, SystemCommand,
-    },
+    super::protocol::{BatchCommand, ConfigCommand, DaemonCommand, ModulesCommand, SystemCommand},
     http::{self, WebuiHttpSession},
 };
 use crate::{

@@ -338,7 +338,27 @@ async function runDaemonHttp(
   return payload;
 }
 
+// In-flight request deduplication: identical concurrent commands share one promise.
+const inflightRequests = new Map<string, Promise<unknown>>();
+
 export async function runDaemonCommand(
+  command: DaemonCommandPayload,
+  binaryPath: string,
+): Promise<unknown> {
+  const key = JSON.stringify(command);
+  const existing = inflightRequests.get(key);
+  if (existing) return existing;
+
+  const promise = runDaemonCommandInternal(command, binaryPath);
+  inflightRequests.set(key, promise);
+  try {
+    return await promise;
+  } finally {
+    inflightRequests.delete(key);
+  }
+}
+
+async function runDaemonCommandInternal(
   command: DaemonCommandPayload,
   binaryPath: string,
 ): Promise<unknown> {
