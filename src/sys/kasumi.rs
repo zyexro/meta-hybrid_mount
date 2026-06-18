@@ -781,7 +781,10 @@ pub fn check_status() -> KasumiStatus {
             Ok(version) if version < KSM_PROTOCOL_VERSION => KasumiStatus::KernelNotSupported,
             Ok(version) if version > KSM_PROTOCOL_VERSION => KasumiStatus::ModuleTooOld,
             Ok(_) => KasumiStatus::Available,
-            Err(_) => KasumiStatus::NotPresent,
+            Err(err) => {
+                crate::scoped_log!(debug, "kasumi", "protocol version query failed: {}", err);
+                KasumiStatus::NotPresent
+            }
         }
     };
 

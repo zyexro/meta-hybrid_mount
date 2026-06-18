@@ -162,6 +162,7 @@ fn mount_overlay_core(
             Some(CString::new(data)?.as_c_str()),
         )?;
     }
+    crate::scoped_log!(info, "overlayfs", "mount success: {}", dest.display());
     Ok(())
 }
 
@@ -204,6 +205,13 @@ pub fn mount_overlayfs(
         ensure_dir_exists(&staging_dir)?;
 
         mount_overlay_core(&bottom_chunk, None, None, &staging_dir, mount_source)?;
+        crate::scoped_log!(
+            debug,
+            "overlayfs",
+            "staging layer created: path={}, input_layers={}",
+            staging_dir.display(),
+            bottom_chunk.len()
+        );
 
         let _ = send_umountable(&staging_dir);
 

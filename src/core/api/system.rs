@@ -214,7 +214,16 @@ fn detect_partitions(_config: &Config) -> Result<Vec<PartitionInfo>> {
         let mount_point = PathBuf::from("/").join(&name);
         let metadata = match fs::symlink_metadata(&mount_point) {
             Ok(metadata) => metadata,
-            Err(_) => continue,
+            Err(err) => {
+                crate::scoped_log!(
+                    debug,
+                    "system:api",
+                    "skipping partition {}: metadata read failed: {}",
+                    name,
+                    err
+                );
+                continue;
+            }
         };
         let exists_as_symlink = metadata.file_type().is_symlink();
         let resolved = if exists_as_symlink {

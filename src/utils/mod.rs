@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod path;
+pub mod sync;
 pub mod validation;
 
 use std::{
@@ -22,7 +23,7 @@ use std::{
 
 use anyhow::Result;
 
-pub use self::{path::*, validation::*};
+pub use self::{path::*, sync::*, validation::*};
 #[macro_export]
 macro_rules! scoped_log {
     ($level:ident, $scope:literal, $fmt:literal $(, $args:expr)* $(,)?) => {

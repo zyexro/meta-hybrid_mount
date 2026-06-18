@@ -269,6 +269,12 @@ fn cleanup_stale_socket(path: &Path) -> Result<()> {
     match UnixStream::connect(path) {
         Ok(_) => bail!("daemon socket already active at {}", path.display()),
         Err(_) => {
+            crate::scoped_log!(
+                debug,
+                "daemon:server",
+                "removing stale socket: {}",
+                path.display()
+            );
             fs::remove_file(path)
                 .with_context(|| format!("Failed to remove stale socket {}", path.display()))?;
             Ok(())
@@ -310,7 +316,16 @@ fn is_pid_process_alive(pid: i32) -> bool {
     let cmdline_path = format!("/proc/{pid}/cmdline");
     match fs::read_to_string(&cmdline_path) {
         Ok(cmdline) => cmdline.contains("hybrid-mount"),
-        Err(_) => true,
+        Err(err) => {
+            crate::scoped_log!(
+                debug,
+                "daemon:server",
+                "cannot read cmdline for pid {} (expected if process ended): {}",
+                pid,
+                err
+            );
+            true
+        }
     }
 }
 

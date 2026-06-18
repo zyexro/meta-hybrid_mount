@@ -103,7 +103,16 @@ fn set_description(prop_path: &Path, desc_text: &str) {
                 }
             })
             .collect(),
-        Err(_) => return,
+        Err(err) => {
+            crate::scoped_log!(
+                warn,
+                "module_status",
+                "failed to read module.prop: path={}, error={}",
+                prop_path.display(),
+                err
+            );
+            return;
+        }
     };
 
     let content = lines.join("\n");

@@ -40,7 +40,8 @@ use super::{
 use crate::{
     conf::config::Config,
     core::{api, inventory, runtime_state::RuntimeState},
-    defs, utils,
+    defs,
+    utils::{self, lock_or_recover},
 };
 #[cfg(feature = "kasumi")]
 use crate::{
@@ -83,7 +84,7 @@ impl RuntimeConfigCache {
     pub(super) fn load(&self, config_path: &Path) -> Result<Arc<Config>> {
         let stamp = config_file_stamp(config_path)?;
         let key = config_path.to_path_buf();
-        let mut entries = self.entries.lock().expect("runtime config cache poisoned");
+        let mut entries = lock_or_recover(&self.entries);
 
         if let Some(entry) = entries.get(&key)
             && entry.stamp == stamp
@@ -105,9 +106,7 @@ impl RuntimeConfigCache {
     pub(super) fn store(&self, config_path: &Path, config: Config) -> Result<Arc<Config>> {
         let stamp = config_file_stamp(config_path)?;
         let config = Arc::new(config);
-        self.entries
-            .lock()
-            .expect("runtime config cache poisoned")
+        lock_or_recover(&self.entries)
             .insert(
                 config_path.to_path_buf(),
                 CachedRuntimeConfig {
@@ -210,16 +209,16 @@ impl<'a> CommandContext<'a> {
 }
 
 fn runtime_snapshot(state: &Arc<Mutex<RuntimeState>>) -> RuntimeState {
-    state.lock().expect("daemon state poisoned").clone()
+    lock_or_recover(state).clone()
 }
 
 fn cached_status_value(state: &Arc<Mutex<RuntimeState>>) -> Result<Value> {
-    let mut guard = state.lock().expect("daemon state poisoned");
+    let mut guard = lock_or_recover(state);
     Ok(guard.status_value()?.clone())
 }
 
 fn cached_status_and_snapshot(state: &Arc<Mutex<RuntimeState>>) -> Result<(Value, RuntimeState)> {
-    let mut guard = state.lock().expect("daemon state poisoned");
+    let mut guard = lock_or_recover(state);
     let status_value = guard.status_value()?.clone();
     Ok((status_value, guard.clone()))
 }
@@ -284,7 +283,7 @@ fn dispatch_system(ctx: &CommandContext<'_>, cmd: SystemCommand) -> Result<Value
         }
         SystemCommand::ClearMountErrors => {
             let removed_markers = clear_mount_error_markers(config)?;
-            let mut guard = state.lock().expect("daemon state poisoned");
+            let mut guard = lock_or_recover(state);
             let cleared = guard.mount_error_modules.len();
             guard.mount_error_modules.clear();
             guard.mount_error_reasons.clear();
@@ -810,7 +809,7 @@ fn refresh_runtime_snapshot(
     state: &Arc<Mutex<RuntimeState>>,
     sse_clients: &Arc<Mutex<Vec<TcpStream>>>,
 ) -> Result<()> {
-    let mut guard = state.lock().expect("daemon state poisoned");
+    let mut guard = lock_or_recover(state);
     #[cfg(feature = "kasumi")]
     {
         guard.kasumi = kasumi_mount::collect_runtime_info(config);

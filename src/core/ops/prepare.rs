@@ -413,6 +413,7 @@ fn prepare_mount_plan_with_root(
 
     fs::create_dir_all(target_base)
         .with_context(|| format!("failed to create storage root {}", target_base.display()))?;
+    crate::scoped_log!(debug, "prepare", "storage root created: {}", target_base.display());
     prune_orphaned_children(
         target_base,
         modules.iter().map(|module| module.id.as_str()),
@@ -433,7 +434,13 @@ fn prepare_mount_plan_with_root(
     let mut kasumi_ids = HashSet::new();
 
     for module in modules {
-        crate::scoped_log!(debug, "prepare", "module inspect: id={}", module.id);
+        crate::scoped_log!(
+            debug,
+            "prepare",
+            "module process: id={}, source={}",
+            module.id,
+            module.source_path.display()
+        );
         let prepared = PreparedDir::new(target_base, &module.id)
             .map_err(|err| module_sync_error(module, err))?;
         let outcome = prepare_module(
@@ -475,6 +482,16 @@ fn prepare_mount_plan_with_root(
         prepared
             .commit()
             .map_err(|err| module_sync_error(module, err))?;
+
+        crate::scoped_log!(
+            debug,
+            "prepare",
+            "module prepared: id={}, overlay={}, magic={}, kasumi={}",
+            module.id,
+            !outcome.plan.overlay_groups.is_empty(),
+            outcome.plan.magic,
+            outcome.plan.kasumi
+        );
 
         merge_overlay_groups(&mut overlay_groups, outcome.plan.overlay_groups);
         if outcome.plan.magic {

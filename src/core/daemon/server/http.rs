@@ -28,7 +28,7 @@ use anyhow::{Context, Error, Result};
 use serde_json::{Value, json};
 
 use super::super::protocol::DaemonResponse;
-use crate::{core::runtime_state::RuntimeState, defs};
+use crate::{core::runtime_state::RuntimeState, defs, utils::lock_or_recover};
 
 pub(super) struct WebuiHttpState {
     pub(super) listener: TcpListener,
@@ -475,9 +475,11 @@ fn handle_sse_endpoint(
     .context("Failed to write SSE response header")?;
     stream.flush().context("Failed to flush SSE headers")?;
 
+    crate::scoped_log!(info, "daemon:sse", "client connected");
+
     // Send initial event
     let initial = {
-        let mut guard = state.lock().expect("daemon state poisoned");
+        let mut guard = lock_or_recover(state);
         serde_json::to_string(guard.status_value()?).unwrap_or_default()
     };
     write!(stream, "event: state_update\ndata: {initial}\n\n")
@@ -490,7 +492,7 @@ fn handle_sse_endpoint(
         .try_clone()
         .context("Failed to clone stream for SSE broadcast")?;
     {
-        let mut clients = sse_clients.lock().expect("sse_clients poisoned");
+        let mut clients = lock_or_recover(sse_clients);
         clients.push(sse_stream);
     }
 
@@ -521,6 +523,8 @@ fn handle_sse_endpoint(
         }
     }
 
+    crate::scoped_log!(info, "daemon:sse", "client disconnected");
+
     Ok(ConnectionAction::Close)
 }
 
@@ -532,15 +536,24 @@ pub(super) fn broadcast_sse_event(
     let body = {
         let mut guard = match state.lock() {
             Ok(g) => g,
-            Err(_) => return,
+            Err(e) => {
+                crate::scoped_log!(error, "daemon:sse", "state lock poisoned during broadcast: {:#}", e);
+                return;
+            }
         };
         let json = match guard.status_value() {
             Ok(v) => v.clone(),
-            Err(_) => return,
+            Err(e) => {
+                crate::scoped_log!(error, "daemon:sse", "status_value() failed: {:#}", e);
+                return;
+            }
         };
         match serde_json::to_string(&json) {
             Ok(s) => format!("event: {event}\ndata: {s}\n\n"),
-            Err(_) => return,
+            Err(e) => {
+                crate::scoped_log!(error, "daemon:sse", "JSON serialization failed: {:#}", e);
+                return;
+            }
         }
     };
 
@@ -548,7 +561,10 @@ pub(super) fn broadcast_sse_event(
     let clients: Vec<TcpStream> = {
         let mut guard = match sse_clients.lock() {
             Ok(g) => g,
-            Err(_) => return,
+            Err(e) => {
+                crate::scoped_log!(error, "daemon:sse", "failed to acquire sse_clients lock: {:#}", e);
+                return;
+            }
         };
         std::mem::take(&mut *guard)
     };
