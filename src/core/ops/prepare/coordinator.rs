@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod executor;
-#[cfg(feature = "kasumi")]
-pub mod mirror_sync;
-pub mod plan;
-pub mod prepare;
-mod prepare_old;
+// Re-export from old prepare.rs temporarily
+pub use super::super::prepare_old::prepare_mount_plan;
+pub(crate) use super::super::prepare_old::prepare_mount_plan_with_root;

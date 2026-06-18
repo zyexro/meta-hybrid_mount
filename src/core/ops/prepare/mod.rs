@@ -12,9 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod executor;
-#[cfg(feature = "kasumi")]
-pub mod mirror_sync;
-pub mod plan;
-pub mod prepare;
-mod prepare_old;
+mod types;
+mod plan_builder;
+mod dir_walker;
+mod module_processor;
+mod coordinator;
+
+#[cfg(test)]
+mod tests;
+
+// 公共 API
+pub use coordinator::prepare_mount_plan;
+
+#[allow(unused_imports)]
+pub(crate) use coordinator::prepare_mount_plan_with_root;

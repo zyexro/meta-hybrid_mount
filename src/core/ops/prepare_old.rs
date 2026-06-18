@@ -378,7 +378,7 @@ pub fn prepare_mount_plan(
     )
 }
 
-fn prepare_mount_plan_with_root(
+pub(crate) fn prepare_mount_plan_with_root(
     config: &config::Config,
     modules: &[Module],
     target_base: &Path,
