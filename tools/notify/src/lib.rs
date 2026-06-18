@@ -177,17 +177,19 @@ impl NotificationContext<'_> {
     ) -> Result<Vec<MediaGroupItem>> {
         let mut items = Vec::with_capacity(artifacts.len());
 
-        for (i, artifact) in artifacts.iter().enumerate() {
+        for artifact in &artifacts[..artifacts.len() - 1] {
             let file = InputFile::path(artifact.path.clone()).await?;
-            let mut info = InputMediaDocument::default().with_disable_content_type_detection(true);
-            if i == 0 {
-                info = info
-                    .with_caption_parse_mode(ParseMode::Html)
-                    .with_caption(caption.to_owned());
-            }
+            let info = InputMediaDocument::default().with_disable_content_type_detection(true);
             items.push(MediaGroupItem::for_document(file, info));
         }
 
+        items.push(MediaGroupItem::for_document(
+            InputFile::path(artifacts.last().unwrap().path.clone()).await?,
+            InputMediaDocument::default()
+                .with_disable_content_type_detection(true)
+                .with_caption_parse_mode(ParseMode::Html)
+                .with_caption(caption.to_owned()),
+        ));
         Ok(items)
     }
 
