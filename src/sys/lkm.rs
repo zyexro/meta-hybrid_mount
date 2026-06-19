@@ -259,7 +259,7 @@ fn loaded_module_name() -> Option<String> {
 }
 
 pub fn is_loaded() -> bool {
-    loaded_module_name().is_some()
+    loaded_module_name().is_some() || crate::sys::kasumi::can_operate()
 }
 
 pub fn has_module_assets(config: &KasumiConfig) -> bool {

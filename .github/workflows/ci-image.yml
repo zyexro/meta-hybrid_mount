@@ -30,7 +30,7 @@ permissions:
   packages: write
 
 env:
-  CI_IMAGE: ghcr.io/hybrid-mount/meta-hybrid_mount-ci
+  CI_IMAGE: ghcr.io/zyexro/meta-hybrid_mount-ci
 
 jobs:
   build:
