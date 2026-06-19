@@ -17,4 +17,4 @@
 # Add one module ID per line. Example:
 # blacklist = ["example_module_id", "another_module_id"]
 
-blacklist = ["AAaTempSpoof"]
+blacklist = ["AAaTempSpoof", "scene_swap_controller"]

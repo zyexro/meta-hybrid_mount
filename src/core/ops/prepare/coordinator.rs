@@ -20,6 +20,11 @@ use std::{
 
 use anyhow::{Context, Result};
 
+use super::{
+    module_processor::{module_requests_kasumi, module_sync_error, prepare_module},
+    plan_builder::{merge_overlay_groups, sorted_ids},
+    types::PrepareContext,
+};
 use crate::{
     core::{
         backend_capabilities::BackendCapabilities,
@@ -27,14 +32,8 @@ use crate::{
         ops::plan::{MountPlan, OverlayOperation},
     },
     partitions,
-    sys::fs::{finalize_copied_tree, prune_orphaned_children, remove_path, PreparedDir},
+    sys::fs::{PreparedDir, finalize_copied_tree, prune_orphaned_children, remove_path},
     utils,
-};
-
-use super::{
-    module_processor::{module_requests_kasumi, module_sync_error, prepare_module},
-    plan_builder::{merge_overlay_groups, sorted_ids},
-    types::PrepareContext,
 };
 
 pub fn prepare_mount_plan(
@@ -88,7 +87,12 @@ pub(crate) fn prepare_mount_plan_with_root(
 
     fs::create_dir_all(target_base)
         .with_context(|| format!("failed to create storage root {}", target_base.display()))?;
-    crate::scoped_log!(debug, "prepare", "storage root created: {}", target_base.display());
+    crate::scoped_log!(
+        debug,
+        "prepare",
+        "storage root created: {}",
+        target_base.display()
+    );
     prune_orphaned_children(
         target_base,
         modules.iter().map(|module| module.id.as_str()),

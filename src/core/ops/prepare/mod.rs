@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod types;
-mod plan_builder;
+mod coordinator;
 mod dir_walker;
 mod module_processor;
-mod coordinator;
+mod plan_builder;
+mod types;
 
 #[cfg(test)]
 mod tests;

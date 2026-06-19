@@ -17,6 +17,7 @@ export KSU_METAMODULE="hybrid-mount"
 BASE_DIR="/data/adb/hybrid-mount"
 MANAGED_PARTITIONS="odm product system_ext vendor apex mi_ext my_bigball my_carrier my_company my_engineering my_heytap my_manifest my_preload my_product my_region my_reserve my_stock oem optics prism"
 MODE_MARKERS="overlay magic"
+SELF_MOUNTING_MODULE_BLOCKLIST="scene_swap_controller"
 NANO_MODE=false
 
 detect_nano_mode() {
@@ -88,6 +89,43 @@ module_has_managed_partitions() {
     fi
   done
   return 1
+}
+
+current_module_id() {
+  if [ -n "$KSU_MODULE" ]; then
+    printf '%s\n' "$KSU_MODULE"
+    return 0
+  fi
+  if [ -n "$AP_MODULE" ]; then
+    printf '%s\n' "$AP_MODULE"
+    return 0
+  fi
+  if [ -n "$MODID" ]; then
+    printf '%s\n' "$MODID"
+    return 0
+  fi
+  if [ -f "$MODPATH/module.prop" ]; then
+    grep -m 1 '^id=' "$MODPATH/module.prop" | sed 's/^id=//'
+  fi
+}
+
+mark_self_mounting_blocklisted_module() {
+  local current_module blocked_id
+  current_module="$(current_module_id)"
+  if [ -z "$current_module" ]; then
+    return 0
+  fi
+
+  for blocked_id in $SELF_MOUNTING_MODULE_BLOCKLIST; do
+    if [ "$current_module" = "$blocked_id" ]; then
+      ui_print "**********************************************"
+      ui_print "! Module '$current_module' already has self-mounting logic!"
+      ui_print "! Marking skip mount"
+      ui_print "**********************************************"
+      : >"$MODPATH/skip_mount"
+      return 0
+    fi
+  done
 }
 
 current_mount_mode_marker() {
@@ -188,6 +226,7 @@ mark_replace() {
 ui_print "- Using Hybrid Mount metainstall"
 
 install_module
+mark_self_mounting_blocklisted_module
 
 if detect_nano_mode; then
   NANO_MODE=true
@@ -200,7 +239,7 @@ done
 
 cleanup_empty_system_dir
 
-if [ "$NANO_MODE" = "true" ] && module_has_managed_partitions; then
+if [ "$NANO_MODE" = "true" ] && [ ! -f "$MODPATH/skip_mount" ] && module_has_managed_partitions; then
   prompt_module_mount_mode
 fi
 
@@ -235,10 +274,11 @@ metamodule_hot_install() {
 
   # we do this dance to satisfy kernelsu's ensure_file_exists
   mkdir -p "$MODPATH_INTERNAL"
-  cat "$MODDIR_INTERNAL/module.prop" > "$MODPATH_INTERNAL/module.prop"
+  cat "$MODDIR_INTERNAL/module.prop" >"$MODPATH_INTERNAL/module.prop"
 
-  ( sleep 3 ; 
-    rm -rf "$MODDIR_INTERNAL/update" ; 
+  (
+    sleep 3
+    rm -rf "$MODDIR_INTERNAL/update"
     rm -rf "$MODPATH_INTERNAL"
   ) & # fork in background
 

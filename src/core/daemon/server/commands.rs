@@ -106,14 +106,13 @@ impl RuntimeConfigCache {
     pub(super) fn store(&self, config_path: &Path, config: Config) -> Result<Arc<Config>> {
         let stamp = config_file_stamp(config_path)?;
         let config = Arc::new(config);
-        lock_or_recover(&self.entries)
-            .insert(
-                config_path.to_path_buf(),
-                CachedRuntimeConfig {
-                    stamp,
-                    config: config.clone(),
-                },
-            );
+        lock_or_recover(&self.entries).insert(
+            config_path.to_path_buf(),
+            CachedRuntimeConfig {
+                stamp,
+                config: config.clone(),
+            },
+        );
         Ok(config)
     }
 }

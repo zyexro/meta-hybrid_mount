@@ -17,9 +17,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{core::inventory::Module, domain::MountMode};
-
 use super::types::ModulePlanOutcome;
+use crate::{core::inventory::Module, domain::MountMode};
 
 pub(super) fn queue_overlay(
     plan: &mut ModulePlanOutcome,

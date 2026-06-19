@@ -21,17 +21,16 @@ use std::{
 
 use anyhow::{Context, Result};
 
+use super::{
+    plan_builder::{log_mode_decision, queue_overlay},
+    types::{EntryState, ModeDecision, ModulePrepareOutcome, PrepareContext, ProcessingItem},
+};
 use crate::{
     core::inventory::Module,
     defs,
     domain::MountMode,
     sys::fs::{copy_non_dir_entry, ensure_dir_like},
     utils,
-};
-
-use super::{
-    plan_builder::{log_mode_decision, queue_overlay},
-    types::{EntryState, ModeDecision, ModulePrepareOutcome, PrepareContext, ProcessingItem},
 };
 
 impl PrepareContext {

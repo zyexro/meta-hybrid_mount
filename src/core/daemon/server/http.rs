@@ -537,7 +537,12 @@ pub(super) fn broadcast_sse_event(
         let mut guard = match state.lock() {
             Ok(g) => g,
             Err(e) => {
-                crate::scoped_log!(error, "daemon:sse", "state lock poisoned during broadcast: {:#}", e);
+                crate::scoped_log!(
+                    error,
+                    "daemon:sse",
+                    "state lock poisoned during broadcast: {:#}",
+                    e
+                );
                 return;
             }
         };
@@ -562,7 +567,12 @@ pub(super) fn broadcast_sse_event(
         let mut guard = match sse_clients.lock() {
             Ok(g) => g,
             Err(e) => {
-                crate::scoped_log!(error, "daemon:sse", "failed to acquire sse_clients lock: {:#}", e);
+                crate::scoped_log!(
+                    error,
+                    "daemon:sse",
+                    "failed to acquire sse_clients lock: {:#}",
+                    e
+                );
                 return;
             }
         };

@@ -16,13 +16,12 @@ use std::{fs, path::Path};
 
 use tempfile::TempDir;
 
+use super::{coordinator::prepare_mount_plan_with_root, types::SHALLOW_OVERLAY_DIR};
 use crate::{
     conf::config,
     core::{backend_capabilities::BackendCapabilities, inventory::Module, ops::plan::MountPlan},
-    domain::{MountMode, ModuleRules},
+    domain::{ModuleRules, MountMode},
 };
-
-use super::{coordinator::prepare_mount_plan_with_root, types::SHALLOW_OVERLAY_DIR};
 
 fn write_file(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {

@@ -20,6 +20,7 @@ use std::{
 
 use anyhow::{Context, Result};
 
+use super::types::{ModulePrepareOutcome, PrepareContext, ProcessingItem, SHALLOW_OVERLAY_DIR};
 use crate::{
     core::{inventory::Module, recovery::ModuleStageFailure},
     defs,
@@ -27,8 +28,6 @@ use crate::{
     sys::fs::{copy_non_dir_entry, ensure_dir_like},
     utils,
 };
-
-use super::types::{ModulePrepareOutcome, PrepareContext, ProcessingItem, SHALLOW_OVERLAY_DIR};
 
 pub(super) fn prepare_module(
     module: &Module,
