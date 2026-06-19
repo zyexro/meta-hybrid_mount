@@ -23,6 +23,3 @@ mod tests;
 
 // 公共 API
 pub use coordinator::prepare_mount_plan;
-
-#[allow(unused_imports)]
-pub(crate) use coordinator::prepare_mount_plan_with_root;

@@ -21,8 +21,6 @@ use crate::{core::inventory::Module, domain::MountMode};
 
 use super::types::ModulePlanOutcome;
 
-// Temporarily allow dead code until full migration is complete
-#[allow(dead_code)]
 pub(super) fn queue_overlay(
     plan: &mut ModulePlanOutcome,
     resolved_target: PathBuf,
@@ -44,7 +42,6 @@ pub(super) fn queue_overlay(
     layers.push(source);
 }
 
-#[allow(dead_code)]
 pub(super) fn merge_overlay_groups(
     target: &mut BTreeMap<PathBuf, (String, Vec<PathBuf>)>,
     source: BTreeMap<PathBuf, (String, Vec<PathBuf>)>,
@@ -57,14 +54,12 @@ pub(super) fn merge_overlay_groups(
     }
 }
 
-#[allow(dead_code)]
 pub(super) fn sorted_ids(ids: HashSet<String>) -> Vec<String> {
     let mut out: Vec<String> = ids.into_iter().collect();
     out.sort();
     out
 }
 
-#[allow(dead_code)]
 pub(super) fn log_mode_decision(
     module: &Module,
     relative_path: &Path,
