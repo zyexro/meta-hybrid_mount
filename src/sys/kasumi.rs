@@ -528,14 +528,6 @@ fn fetch_anon_fd() -> Result<c_int> {
 
     crate::scoped_log!(debug, "kasumi:fd", "start: source=kernel_query");
 
-    // Bail immediately when Kasumi LKM isn't loaded — avoids a ~4.6 s
-    // retry loop that can never succeed on unsupported kernels.
-    // Use module_loaded() instead of check_status() to avoid recursion:
-    // check_status() → get_protocol_version() → ioctl_call() → fetch_anon_fd() → check_status()
-    if !module_loaded() {
-        bail!("Kasumi LKM is not loaded");
-    }
-
     let mut fd = -1;
     const WAIT_ATTEMPTS: usize = 4;
     const SHORT_RETRIES: usize = 2;
@@ -593,6 +585,11 @@ fn fetch_anon_fd() -> Result<c_int> {
 
         if fd >= 0 {
             break;
+        }
+
+        // Bail immediately if not found on first try and it's not in /proc/modules
+        if wait_round == 0 && !module_loaded() {
+            bail!("Kasumi is not loaded (and not built-in)");
         }
     }
 
