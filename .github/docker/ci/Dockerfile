@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# CI image for meta-hybrid_mount builds
 FROM ubuntu:24.04
 
 ARG NDK_VERSION=r27
